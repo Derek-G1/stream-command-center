@@ -1,13 +1,18 @@
 const RENDER_API_URL = 'https://stream-command-center.onrender.com/api';
 
 let currentPlatform = 'twitch';
+let twitchAccessToken = null;
 
 // --- Functions to fetch and render data from the server ---
 
-const fetchData = async (endpoint) => {
+const fetchData = async (endpoint, options = {}) => {
     try {
-        const response = await fetch(`${RENDER_API_URL}/${endpoint}`);
-        if (!response.ok) throw new Error('Network response was not ok');
+        const url = `${RENDER_API_URL}/${endpoint}`;
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
         return await response.json();
     } catch (error) {
         console.error(`Error fetching from ${endpoint}:`, error);
@@ -94,7 +99,8 @@ const switchChat = (platform) => {
 
 const postData = async (endpoint, data) => {
     try {
-        await fetch(`${RENDER_API_URL}/${endpoint}`, {
+        const url = `${RENDER_API_URL}/${endpoint}`;
+        await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
@@ -161,7 +167,6 @@ const pcmToWav = (pcmData, sampleRate) => {
     writeString(view, 0, 'RIFF');
     view.setUint32(4, 36 + pcmData.byteLength, true);
     writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
     view.setUint32(16, 16, true);
     view.setUint16(20, 1, true);
     view.setUint16(22, numChannels, true);
