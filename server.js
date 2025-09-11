@@ -8,8 +8,8 @@ const port = process.env.PORT || 3000;
 
 // IMPORTANT: Never hardcode your credentials in a file that will be pushed to GitHub.
 // Use environment variables for sensitive information.
-const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || 'YOUR_CLIENT_ID';
-const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const pool = new Pool({
