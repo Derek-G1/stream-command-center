@@ -1,4 +1,4 @@
-const RENDER_API_URL = 'https://your-render-app-url.onrender.com/api';
+const RENDER_API_URL = 'https://stream-command-center.onrender.com/api';
 
 let currentPlatform = 'twitch';
 
