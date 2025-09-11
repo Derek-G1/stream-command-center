@@ -1,0 +1,36 @@
+/* General body and font styles */
+body {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Custom scrollbar for chat container */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #1f2937; /* bg-gray-800 */
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #4b5563; /* bg-gray-600 */
+    border-radius: 10px;
+    border: 2px solid #1f2937; /* bg-gray-800 */
+}
+
+/* Keyframe for bounce-in animation */
+@keyframes bounce-in {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.animate-bounce-in {
+    animation: bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}

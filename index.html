@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Command Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="script.js" defer></script>
+</head>
+<body class="bg-gray-900 text-gray-200 font-inter p-6 flex flex-col items-center">
+
+    <div class="max-w-7xl w-full">
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-extrabold text-white mb-2">Stream Command Center</h1>
+            <p class="text-xl font-medium text-gray-400">Manage your stream with a simple, custom panel.</p>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <!-- Left Panel: Stats and Alerts -->
+            <div class="md:col-span-1 space-y-6">
+                <!-- Stream Stats Panel -->
+                <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Stream Stats</h2>
+                    <div class="grid grid-cols-3 gap-4 text-center">
+                        <div class="bg-gray-700 p-4 rounded-xl">
+                            <p class="text-gray-400 text-sm">Viewers</p>
+                            <span id="viewers" class="text-3xl font-extrabold text-white">0</span>
+                            <button id="add-viewer-btn" class="mt-2 w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-2 rounded-lg transition-colors">
+                                +1 Viewer
+                            </button>
+                        </div>
+                        <div class="bg-gray-700 p-4 rounded-xl">
+                            <p class="text-gray-400 text-sm">Followers</p>
+                            <span id="followers" class="text-3xl font-extrabold text-white">0</span>
+                            <button id="add-follower-btn" class="mt-2 w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-2 rounded-lg transition-colors">
+                                +1 Follower
+                            </button>
+                        </div>
+                        <div class="bg-gray-700 p-4 rounded-xl">
+                            <p class="text-gray-400 text-sm">Subs</p>
+                            <span id="subscribers" class="text-3xl font-extrabold text-white">0</span>
+                            <button id="add-subscriber-btn" class="mt-2 w-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-2 rounded-lg transition-colors">
+                                +1 Sub
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Panel -->
+                <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Simulate Events</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="new-follower-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-transform transform hover:scale-105">New Follower</button>
+                        <button id="new-subscriber-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-xl transition-transform transform hover:scale-105">New Subscriber</button>
+                        <button id="new-donation-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl transition-transform transform hover:scale-105">New Donation</button>
+                        <button id="new-raid-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl transition-transform transform hover:scale-105">New Raid</button>
+                    </div>
+                </div>
+
+                <!-- Live Alerts -->
+                <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Live Alerts</h2>
+                    <div id="alerts-container" class="space-y-2">
+                        <!-- Alerts will appear here -->
+                    </div>
+                </div>
+
+                <!-- Text-to-Speech Section -->
+                <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Text-to-Speech</h2>
+                    <textarea id="tts-input" rows="3" class="w-full bg-gray-700 text-white rounded-lg p-3 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Type text to speak..."></textarea>
+                    <button id="tts-button" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition-transform transform hover:scale-105">Generate & Speak</button>
+                </div>
+            </div>
+
+            <!-- Middle Panel: Chat and Feed -->
+            <div class="md:col-span-1 space-y-6">
+                <!-- Chat Panel -->
+                <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 flex flex-col h-full">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Live Chat</h2>
+                    <div class="flex space-x-2 mb-4">
+                        <button id="tab-twitch" class="chat-tab bg-gray-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors">Twitch</button>
+                        <button id="tab-youtube" class="chat-tab bg-gray-800 text-gray-400 hover:bg-gray-700 py-2 px-4 rounded-lg font-semibold transition-colors">YouTube</button>
+                        <button id="tab-kick" class="chat-tab bg-gray-800 text-gray-400 hover:bg-gray-700 py-2 px-4 rounded-lg font-semibold transition-colors">Kick</button>
+                    </div>
+                    <div id="chat-container" class="flex-grow bg-gray-900 p-4 rounded-xl overflow-y-auto mb-4 custom-scrollbar">
+                        <!-- Chat messages will appear here -->
+                    </div>
+                    <div class="flex mt-auto space-x-2">
+                        <input id="chat-input" type="text" placeholder="Send a chat message..." class="flex-grow bg-gray-700 text-white rounded-lg p-3 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                        <button id="twitch-chat-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl transition-colors">Send</button>
+                        <button id="youtube-chat-btn" class="hidden bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-xl transition-colors">Send</button>
+                        <button id="kick-chat-btn" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl transition-colors">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Recent Events -->
+            <div class="md:col-span-1 space-y-6">
+                <!-- Recent Followers -->
+                <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Recent Followers</h2>
+                    <div id="followers-list" class="space-y-1">
+                        <!-- Followers will be listed here -->
+                    </div>
+                </div>
+
+                <!-- Recent Subscribers -->
+                <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Recent Subscribers</h2>
+                    <div id="subscribers-list" class="space-y-1">
+                        <!-- Subscribers will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Custom Alert Modal -->
+    <div id="custom-alert-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
+        <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl border-2 border-blue-500 w-full max-w-sm text-center">
+            <p id="custom-alert-message" class="text-xl font-semibold text-white mb-6"></p>
+            <button id="hide-alert-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors">OK</button>
+        </div>
+    </div>
+</body>
+</html>
