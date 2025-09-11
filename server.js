@@ -18,7 +18,9 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-app.use(cors());
+app.use(cors({
+    origin: [FRONTEND_URL, 'https://stream-command-center.onrender.com']
+}));
 app.use(express.json());
 app.use(session({
   secret: 'a-random-secret-key-for-sessions',
