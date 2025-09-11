@@ -2,8 +2,25 @@ const RENDER_API_URL = 'https://stream-command-center.onrender.com/api';
 
 let currentPlatform = 'twitch';
 let twitchAccessToken = null;
+let twitchUserId = null;
 
-// --- Functions to fetch and render data from the server ---
+// A simple way to get the access token from the URL if a user is redirected back from Twitch
+const getQueryParam = (param) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(param);
+};
+
+const checkAndHandleAuth = () => {
+    const accessTokenParam = getQueryParam('access_token');
+    const twitchUserIdParam = getQueryParam('twitch_user_id');
+    if (accessTokenParam && twitchUserIdParam) {
+        twitchAccessToken = accessTokenParam;
+        twitchUserId = twitchUserIdParam;
+        console.log("Twitch access token received:", twitchAccessToken);
+        console.log("Twitch user ID received:", twitchUserId);
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+};
 
 const fetchData = async (endpoint, options = {}) => {
     try {
@@ -41,8 +58,7 @@ const renderAlerts = async () => {
     });
 };
 
-const renderFollowers = async () => {
-    const followers = await fetchData('followers');
+const renderFollowers = async (followers) => {
     const followersList = document.getElementById('followers-list');
     followersList.innerHTML = '';
     followers.forEach(follower => {
@@ -95,8 +111,6 @@ const switchChat = (platform) => {
     renderChat(currentPlatform);
 };
 
-// --- Functions to send data to the server ---
-
 const postData = async (endpoint, data) => {
     try {
         const url = `${RENDER_API_URL}/${endpoint}`;
@@ -142,8 +156,6 @@ const handleNewChatMessage = () => {
     postData(`chat/${currentPlatform}`, { username: 'Streamer', message });
     chatInput.value = '';
 };
-
-// --- TTS and Alert Modal Logic (unchanged from previous version) ---
 
 const base64ToArrayBuffer = (base64) => {
     const binaryString = window.atob(base64);
@@ -276,28 +288,48 @@ const setupEventListeners = () => {
     document.getElementById('tab-kick').addEventListener('click', () => switchChat('kick'));
 };
 
-const addTwitchConnectButton = () => {
+const fetchTwitchFollowers = async () => {
+    if (!twitchAccessToken) {
+        showCustomAlert("Please connect to Twitch first!");
+        return;
+    }
+    const endpoint = `twitch/followers?access_token=${twitchAccessToken}&user_id=${twitchUserId}`;
+    const followers = await fetchData(endpoint);
+    if (followers && followers.length > 0) {
+        renderFollowers(followers);
+    } else {
+        showCustomAlert("No followers found. Check your Twitch user ID and API permissions.");
+    }
+};
+
+const addTwitchButtons = () => {
+    const container = document.getElementById('twitch-connect-container');
+    container.innerHTML = '';
     const connectButton = document.createElement('a');
     connectButton.textContent = 'Connect to Twitch';
     connectButton.className = 'btn btn-purple';
-    connectButton.href = `${RENDER_API_URL}/auth/twitch`;
-    document.getElementById('twitch-connect-container').appendChild(connectButton);
+    connectButton.href = `https://stream-command-center.onrender.com/api/auth/twitch`;
+    container.appendChild(connectButton);
+
+    const followersButton = document.createElement('button');
+    followersButton.id = 'twitch-followers-btn';
+    followersButton.textContent = 'Fetch Twitch Followers';
+    followersButton.className = 'btn btn-purple mt-4 w-full';
+    container.appendChild(followersButton);
+    followersButton.addEventListener('click', fetchTwitchFollowers);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    checkAndHandleAuth();
     setupEventListeners();
-    addTwitchConnectButton();
+    addTwitchButtons();
     switchChat('twitch');
-    
-    // Initial fetch and continuous updates
+
     renderStats();
     renderAlerts();
-    renderFollowers();
     renderSubscribers();
-    
     setInterval(renderStats, 5000);
     setInterval(renderAlerts, 5000);
-    setInterval(renderFollowers, 5000);
     setInterval(renderSubscribers, 5000);
     setInterval(() => renderChat(currentPlatform), 2000);
 });

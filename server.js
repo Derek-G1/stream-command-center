@@ -112,9 +112,19 @@ app.get('/auth/twitch/callback', async (req, res) => {
         });
 
         const { access_token } = tokenResponse.data;
-        req.session.twitchAccessToken = access_token;
+        
+        // Get user ID from Twitch using the access token
+        const userResponse = await axios.get('https://api.twitch.tv/helix/users', {
+            headers: {
+                'Client-ID': TWITCH_CLIENT_ID,
+                'Authorization': `Bearer ${access_token}`
+            }
+        });
+        const userId = userResponse.data.data[0].id;
+        
+        // Redirect back to the frontend with the access token and user ID
+        res.redirect(`${FRONTEND_URL}/?access_token=${access_token}&twitch_user_id=${userId}`);
 
-        res.redirect(`${FRONTEND_URL}/`);
     } catch (error) {
         console.error('Error getting access token:', error.response ? error.response.data : error.message);
         res.status(500).send('Failed to authenticate with Twitch.');
