@@ -4,7 +4,7 @@ let currentPlatform = 'twitch';
 let twitchAccessToken = null;
 let twitchUserId = null;
 
-// A simple way to get the access token from the URL if a user is redirected back from Twitch
+// A simple way to get the access token and user ID from the URL
 const getQueryParam = (param) => {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(param);
@@ -19,6 +19,7 @@ const checkAndHandleAuth = () => {
         console.log("Twitch access token received:", twitchAccessToken);
         console.log("Twitch user ID received:", twitchUserId);
         window.history.replaceState({}, document.title, window.location.pathname);
+        showCustomAlert("Successfully connected to Twitch!");
     }
 };
 
@@ -324,12 +325,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     addTwitchButtons();
     switchChat('twitch');
-
+    
     renderStats();
     renderAlerts();
     renderSubscribers();
     setInterval(renderStats, 5000);
     setInterval(renderAlerts, 5000);
+    setInterval(renderFollowers, 5000);
     setInterval(renderSubscribers, 5000);
     setInterval(() => renderChat(currentPlatform), 2000);
 });
