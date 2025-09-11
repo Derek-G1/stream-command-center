@@ -292,3 +292,30 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(renderSubscribers, 5000);
     setInterval(() => renderChat(currentPlatform), 2000);
 });
+
+// A simple way to get the access token from the URL if a user is redirected back from Twitch
+const urlParams = new URLSearchParams(window.location.search);
+const accessTokenParam = urlParams.get('access_token');
+if (accessTokenParam) {
+    twitchAccessToken = accessTokenParam;
+    console.log("Twitch access token received:", twitchAccessToken);
+    // You could also save this to local storage
+}
+
+// Function to fetch Twitch followers
+const fetchTwitchFollowers = async () => {
+    if (!twitchAccessToken) {
+        console.error("Twitch access token not available.");
+        return;
+    }
+    const endpoint = `twitch/followers?access_token=${twitchAccessToken}`;
+    const followers = await fetchData(endpoint);
+    console.log("Fetched Twitch followers:", followers);
+};
+
+// Add a button to the HTML to trigger this function
+const twitchFollowersButton = document.createElement('button');
+twitchFollowersButton.textContent = 'Fetch Twitch Followers';
+twitchFollowersButton.className = 'btn btn-twitch mt-4';
+twitchFollowersButton.onclick = fetchTwitchFollowers;
+document.getElementById('main-content').appendChild(twitchFollowersButton);
