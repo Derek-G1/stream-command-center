@@ -17,12 +17,9 @@
             <p class="text-xl font-medium text-gray-400">Manage your stream with a simple, custom panel.</p>
         </header>
 
-        <!-- Main Content Area -->
         <main class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-            <!-- Left Panel: Stats and Alerts -->
             <div class="md:col-span-1 space-y-6">
-                <!-- Stream Stats Panel -->
                 <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
                     <h2 class="text-2xl font-bold mb-4 text-white">Stream Stats</h2>
                     <div class="grid grid-cols-3 gap-4 text-center">
@@ -50,7 +47,9 @@
                     </div>
                 </div>
 
-                <!-- Control Panel -->
+                <div id="twitch-connect-container" class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 text-center">
+                    </div>
+
                 <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
                     <h2 class="text-2xl font-bold mb-4 text-white">Simulate Events</h2>
                     <div class="grid grid-cols-2 gap-4">
@@ -61,15 +60,12 @@
                     </div>
                 </div>
 
-                <!-- Live Alerts -->
                 <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
                     <h2 class="text-2xl font-bold mb-4 text-white">Live Alerts</h2>
                     <div id="alerts-container" class="space-y-2">
-                        <!-- Alerts will appear here -->
-                    </div>
+                        </div>
                 </div>
 
-                <!-- Text-to-Speech Section -->
                 <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
                     <h2 class="text-2xl font-bold mb-4 text-white">Text-to-Speech</h2>
                     <textarea id="tts-input" rows="3" class="w-full bg-gray-700 text-white rounded-lg p-3 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Type text to speak..."></textarea>
@@ -77,9 +73,7 @@
                 </div>
             </div>
 
-            <!-- Middle Panel: Chat and Feed -->
             <div class="md:col-span-1 space-y-6">
-                <!-- Chat Panel -->
                 <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 flex flex-col h-full">
                     <h2 class="text-2xl font-bold mb-4 text-white">Live Chat</h2>
                     <div class="flex space-x-2 mb-4">
@@ -88,8 +82,7 @@
                         <button id="tab-kick" class="chat-tab bg-gray-800 text-gray-400 hover:bg-gray-700 py-2 px-4 rounded-lg font-semibold transition-colors">Kick</button>
                     </div>
                     <div id="chat-container" class="flex-grow bg-gray-900 p-4 rounded-xl overflow-y-auto mb-4 custom-scrollbar">
-                        <!-- Chat messages will appear here -->
-                    </div>
+                        </div>
                     <div class="flex mt-auto space-x-2">
                         <input id="chat-input" type="text" placeholder="Send a chat message..." class="flex-grow bg-gray-700 text-white rounded-lg p-3 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
                         <button id="twitch-chat-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl transition-colors">Send</button>
@@ -99,28 +92,22 @@
                 </div>
             </div>
 
-            <!-- Right Panel: Recent Events -->
             <div class="md:col-span-1 space-y-6">
-                <!-- Recent Followers -->
                 <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
                     <h2 class="text-2xl font-bold mb-4 text-white">Recent Followers</h2>
                     <div id="followers-list" class="space-y-1">
-                        <!-- Followers will be listed here -->
-                    </div>
+                        </div>
                 </div>
 
-                <!-- Recent Subscribers -->
                 <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
                     <h2 class="text-2xl font-bold mb-4 text-white">Recent Subscribers</h2>
                     <div id="subscribers-list" class="space-y-1">
-                        <!-- Subscribers will be listed here -->
-                    </div>
+                        </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Custom Alert Modal -->
     <div id="custom-alert-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
         <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl border-2 border-blue-500 w-full max-w-sm text-center">
             <p id="custom-alert-message" class="text-xl font-semibold text-white mb-6"></p>

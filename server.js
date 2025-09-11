@@ -1,250 +1,230 @@
 const express = require('express');
-const cors = require('cors');
 const { Pool } = require('pg');
+const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware
+// IMPORTANT: Never hardcode your credentials in a file that will be pushed to GitHub.
+// Use environment variables for sensitive information.
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || 'YOUR_CLIENT_ID';
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+const pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+
 app.use(cors());
 app.use(express.json());
 
-// Twitch credentials from environment variables
-const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || 'YOUR_CLIENT_ID';
-const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
-
-// PostgreSQL connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-// Function to initialize the database tables
-const initializeDb = async () => {
-  try {
-    const client = await pool.connect();
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS stats (
-        viewers INT DEFAULT 0,
-        followers INT DEFAULT 0,
-        subscribers INT DEFAULT 0
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS alerts (
-        id SERIAL PRIMARY KEY,
-        message TEXT,
-        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS followers (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255),
-        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS subscribers (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255),
-        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS chat_twitch (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255),
-        message TEXT,
-        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS chat_youtube (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255),
-        message TEXT,
-        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS chat_kick (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255),
-        message TEXT,
-        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // Ensure there is at least one row in the stats table
-    const result = await client.query('SELECT COUNT(*) FROM stats;');
-    if (result.rows[0].count === '0') {
-      await client.query('INSERT INTO stats (viewers, followers, subscribers) VALUES (0, 0, 0);');
+// --- Database Initialization ---
+const initDb = async () => {
+    try {
+        const client = await pool.connect();
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS stats (
+                id SERIAL PRIMARY KEY,
+                viewers INTEGER NOT NULL DEFAULT 0,
+                followers INTEGER NOT NULL DEFAULT 0,
+                subscribers INTEGER NOT NULL DEFAULT 0
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS alerts (
+                id SERIAL PRIMARY KEY,
+                message TEXT NOT NULL,
+                timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS followers (
+                id SERIAL PRIMARY KEY,
+                username TEXT NOT NULL,
+                timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS subscribers (
+                id SERIAL PRIMARY KEY,
+                username TEXT NOT NULL,
+                timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS chat (
+                id SERIAL PRIMARY KEY,
+                platform TEXT NOT NULL,
+                username TEXT NOT NULL,
+                message TEXT NOT NULL,
+                timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        `);
+        // Initialize a single row for stats if it doesn't exist
+        const result = await client.query('SELECT COUNT(*) FROM stats');
+        if (parseInt(result.rows[0].count) === 0) {
+            await client.query('INSERT INTO stats (viewers, followers, subscribers) VALUES (0, 0, 0)');
+        }
+        client.release();
+        console.log('Database schema initialized successfully.');
+    } catch (err) {
+        console.error('Error initializing database:', err);
     }
-    client.release();
-    console.log("Database tables initialized successfully.");
-  } catch (err) {
-    console.error("Error initializing database:", err);
-  }
 };
 
-initializeDb();
+initDb();
 
-// Twitch authentication route
-app.get('/auth/twitch', (req, res) => {
-  const TWITCH_REDIRECT_URI = 'https://stream-command-center.onrender.com/auth/twitch/callback';
-  const TWITCH_AUTH_URL = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${TWITCH_REDIRECT_URI}&response_type=code&scope=channel%3Aread%3Afollowers`;
-  res.redirect(TWITCH_AUTH_URL);
+// --- API Endpoints ---
+
+// Twitch OAuth flow
+app.get('/api/auth/twitch', (req, res) => {
+    const redirectUri = `https://stream-command-center.onrender.com/auth/twitch/callback`;
+    const scopes = 'user:read:follows user:read:subscriptions channel:read:polls'; // Add more scopes as needed
+    const twitchAuthUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=token&scope=${scopes}`;
+    res.redirect(twitchAuthUrl);
 });
 
-// Twitch auth callback route
-app.get('/auth/twitch/callback', async (req, res) => {
-  const TWITCH_REDIRECT_URI = 'https://stream-command-center.onrender.com/auth/twitch/callback';
-  const { code } = req.query;
-  if (!code) {
-    return res.status(400).send('No authorization code provided.');
-  }
-
-  try {
-    const tokenResponse = await axios.post('https://id.twitch.tv/oauth2/token', null, {
-      params: {
-        client_id: TWITCH_CLIENT_ID,
-        client_secret: TWITCH_CLIENT_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: TWITCH_REDIRECT_URI,
-      }
-    });
-
-    const { access_token } = tokenResponse.data;
-
-    // Store the access token in the database or an in-memory store
-    // For simplicity, we'll send it back to the client
-    res.redirect(`/success?access_token=${access_token}`);
-
-  } catch (error) {
-    console.error('Error getting access token:', error.response ? error.response.data : error.message);
-    res.status(500).send('Failed to authenticate with Twitch.');
-  }
+// A temporary route to handle the redirect from Twitch
+app.get('/auth/twitch/callback', (req, res) => {
+    const { access_token } = req.query;
+    if (access_token) {
+        // Redirect back to the frontend with the access token
+        res.redirect(`http://localhost:5500?access_token=${access_token}`);
+    } else {
+        res.send('Authentication failed.');
+    }
 });
 
-// Twitch API routes
+// Endpoint to get recent Twitch followers
 app.get('/api/twitch/followers', async (req, res) => {
-  const { access_token } = req.query;
-  if (!access_token) {
-    return res.status(401).json({ error: 'Access token not provided.' });
-  }
-
-  try {
-    const usersResponse = await axios.get('https://api.twitch.tv/helix/users', {
-      headers: {
-        'Client-ID': TWITCH_CLIENT_ID,
-        'Authorization': `Bearer ${access_token}`
-      }
-    });
-    const streamerId = usersResponse.data.data[0].id;
-    
-    const followersResponse = await axios.get(`https://api.twitch.tv/helix/channels/followers?broadcaster_id=${streamerId}`, {
-      headers: {
-        'Client-ID': TWITCH_CLIENT_ID,
-        'Authorization': `Bearer ${access_token}`
-      }
-    });
-
-    res.json(followersResponse.data.data.map(f => ({ username: f.user_name })));
-
-  } catch (error) {
-    console.error('Error fetching Twitch followers:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Failed to fetch Twitch followers.' });
-  }
+    const { access_token, user_id } = req.query;
+    try {
+        const twitchResponse = await axios.get(`https://api.twitch.tv/helix/users/follows?first=10&to_id=${user_id}`, {
+            headers: {
+                'Client-ID': TWITCH_CLIENT_ID,
+                'Authorization': `Bearer ${access_token}`
+            }
+        });
+        const followers = twitchResponse.data.data.map(f => ({
+            username: f.from_name,
+            followed_at: f.followed_at
+        }));
+        res.json(followers);
+    } catch (err) {
+        console.error('Error fetching Twitch followers:', err.response ? err.response.data : err.message);
+        res.status(500).json({ error: 'Failed to fetch Twitch followers' });
+    }
 });
 
-// --- API Routes for Database Interaction ---
-
-// Get all stats
 app.get('/api/stats', async (req, res) => {
-  const result = await pool.query('SELECT * FROM stats LIMIT 1;');
-  res.json(result.rows[0]);
+    try {
+        const result = await pool.query('SELECT * FROM stats ORDER BY id DESC LIMIT 1');
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error fetching stats:', err);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
-// Get all alerts, ordered by most recent
-app.get('/api/alerts', async (req, res) => {
-  const result = await pool.query('SELECT message FROM alerts ORDER BY timestamp DESC LIMIT 10;');
-  res.json(result.rows);
-});
-
-// Get all followers, ordered by most recent
-app.get('/api/followers', async (req, res) => {
-  const result = await pool.query('SELECT username FROM followers ORDER BY timestamp DESC LIMIT 10;');
-  res.json(result.rows);
-});
-
-// Get all subscribers, ordered by most recent
-app.get('/api/subscribers', async (req, res) => {
-  const result = await pool.query('SELECT username FROM subscribers ORDER BY timestamp DESC LIMIT 10;');
-  res.json(result.rows);
-});
-
-// Get all chat messages for a platform
-app.get('/api/chat/:platform', async (req, res) => {
-  const { platform } = req.params;
-  const tableName = `chat_${platform}`;
-  if (!['twitch', 'youtube', 'kick'].includes(platform)) {
-    return res.status(400).send('Invalid platform.');
-  }
-  const result = await pool.query(`SELECT username, message FROM ${tableName} ORDER BY timestamp DESC LIMIT 50;`);
-  res.json(result.rows.reverse());
-});
-
-// --- API Routes to POST Data (Simulate Events) ---
-
-// Post a new alert
-app.post('/api/alerts', async (req, res) => {
-  const { message } = req.body;
-  await pool.query('INSERT INTO alerts (message) VALUES ($1);', [message]);
-  res.status(201).send('Alert added.');
-});
-
-// Post a new follower
-app.post('/api/followers', async (req, res) => {
-  const { username } = req.body;
-  await pool.query('INSERT INTO followers (username) VALUES ($1);', [username]);
-  res.status(201).send('Follower added.');
-});
-
-// Post a new subscriber
-app.post('/api/subscribers', async (req, res) => {
-  const { username } = req.body;
-  await pool.query('INSERT INTO subscribers (username) VALUES ($1);', [username]);
-  res.status(201).send('Subscriber added.');
-});
-
-// Increment a stat
 app.post('/api/stats/increment', async (req, res) => {
-  const { field } = req.body;
-  if (!['viewers', 'followers', 'subscribers'].includes(field)) {
-    return res.status(400).send('Invalid stat field.');
-  }
-  await pool.query(`UPDATE stats SET ${field} = ${field} + 1;`);
-  res.status(200).send('Stat incremented.');
+    const { field } = req.body;
+    try {
+        await pool.query(`UPDATE stats SET ${field} = ${field} + 1`);
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('Error incrementing stat:', err);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
-// Post a new chat message
+app.get('/api/alerts', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM alerts ORDER BY timestamp DESC LIMIT 5');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching alerts:', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.post('/api/alerts', async (req, res) => {
+    const { message } = req.body;
+    try {
+        await pool.query('INSERT INTO alerts (message) VALUES ($1)', [message]);
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('Error posting alert:', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.get('/api/followers', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM followers ORDER BY timestamp DESC LIMIT 10');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching followers:', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.post('/api/followers', async (req, res) => {
+    const { username } = req.body;
+    try {
+        await pool.query('INSERT INTO followers (username) VALUES ($1)', [username]);
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('Error posting follower:', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.get('/api/subscribers', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM subscribers ORDER BY timestamp DESC LIMIT 10');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching subscribers:', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.post('/api/subscribers', async (req, res) => {
+    const { username } = req.body;
+    try {
+        await pool.query('INSERT INTO subscribers (username) VALUES ($1)', [username]);
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('Error posting subscriber:', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.get('/api/chat/:platform', async (req, res) => {
+    const { platform } = req.params;
+    try {
+        const result = await pool.query('SELECT * FROM chat WHERE platform = $1 ORDER BY timestamp DESC LIMIT 20', [platform]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(`Error fetching chat for ${platform}:`, err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
 app.post('/api/chat/:platform', async (req, res) => {
-  const { platform } = req.params;
-  const { username, message } = req.body;
-  const tableName = `chat_${platform}`;
-  if (!['twitch', 'youtube', 'kick'].includes(platform)) {
-    return res.status(400).send('Invalid platform.');
-  }
-  await pool.query(`INSERT INTO ${tableName} (username, message) VALUES ($1, $2);`, [username, message]);
-  res.status(201).send('Chat message added.');
+    const { platform } = req.params;
+    const { username, message } = req.body;
+    try {
+        await pool.query('INSERT INTO chat (platform, username, message) VALUES ($1, $2, $3)', [platform, username, message]);
+        res.sendStatus(200);
+    } catch (err) {
+        console.error(`Error posting chat for ${platform}:`, err);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
-// Start the server
 app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+    console.log(`Server listening on port ${port}`);
 });
