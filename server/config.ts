@@ -1,3 +1,4 @@
+import { clampGainDb } from '../shared/audio';
 import { DEFAULT_CONFIG } from '../shared/defaults';
 import type { AudioFilter, AudioSource, AudioSourceKind, BroadcastConfig, Destination, Scene, SceneSource } from '../shared/types';
 import { readJson, writeJson } from './files';
@@ -38,15 +39,19 @@ function normalizeFilters(value: unknown): AudioFilter[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
   const filters: AudioFilter[] = [];
+  let gain = false;
   for (const raw of value.slice(0, 8)) {
     if (!raw || typeof raw !== 'object') continue;
     const filter = raw as Record<string, unknown>;
     const type = text(filter.type, '', 32).replace(/[^\w-]/g, '');
-    if (!type) continue;
+    if (!type || (type === 'gain' && gain)) continue;
     let filterId = id(filter.id, `filter-${filters.length}`);
     while (seen.has(filterId)) filterId = id(`${filterId}-${filters.length}`, `filter-${filters.length}`);
     seen.add(filterId);
-    filters.push({ id: filterId, type, enabled: bool(filter.enabled, false) });
+    if (type === 'gain') {
+      gain = true;
+      filters.push({ id: filterId, type: 'gain', enabled: bool(filter.enabled, false), gainDb: clampGainDb(filter.gainDb) });
+    } else filters.push({ id: filterId, type, enabled: bool(filter.enabled, false) });
   }
   return filters;
 }
@@ -66,7 +71,7 @@ function normalizeAudioSource(raw: unknown, i: number, seen: Set<string>): Audio
     enabled: bool(value.enabled, true),
     muted: bool(value.muted, false),
     volume: float(value.volume, 0, 2, 1),
-    device: text(value.device, '', 512).replace(/[\r\n\0]/g, ''),
+    device: text(value.device, '', 512).replace(/[\r\n\0]/g, '').trim(),
     filters: normalizeFilters(value.filters),
   };
 }

@@ -6,7 +6,7 @@ The feature branch now includes:
 
 - Screen/window/device capture through FFmpeg.
 - Optional local recording, off unless the user enables it.
-- Multiple microphone sources, plus desktop loopback where FFmpeg capture supports it, with mute, volume, and levels measured from the encode.
+- Multiple microphone sources, plus desktop loopback where FFmpeg capture supports it, with mute, volume, post-fader RMS, and a per-source Gain filter. DirectShow device names are listed when FFmpeg prints them.
 - FFmpeg progress stats, including `drop_frames` when the progress stream reports them.
 - H.264 NVENC/QSV/AMF/x264 encoder profiles.
 - MKV or MP4 recording when the user enables it.
@@ -32,7 +32,7 @@ The feature branch now includes:
 - Source crop, rotation, blend mode and corner/border effects.
 - Scene transitions.
 - Configurable hotkeys.
-- Audio processing beyond mute, volume, and measured meters: gain, noise suppression, gate, compressor, limiter, monitoring, and sync offset. The source `filters` array is reserved for that chain and is not applied yet.
+- Audio processing beyond Gain: noise suppression, noise gate, compressor, limiter, monitoring, and sync offset. Those types can be stored on a source and are not applied. Gain is the only applied filter.
 - Replay buffer.
 - Virtual camera output.
 - Better Linux device discovery through PipeWire/Pulse/V4L2 enumeration.

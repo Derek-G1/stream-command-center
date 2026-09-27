@@ -50,7 +50,7 @@ export function App() {
     <main>
       {live && dirty && <div class="notice">You changed the active media graph while live. Save keeps it for next start; <b>Apply live</b> performs a controlled encoder restart so the new scene graph takes effect now.</div>}
       {tab === 'studio' && <StudioPanel config={draft} set={setDraft}/>}
-      {tab === 'audio' && <AudioPanel config={draft} runtimeLevels={state.runtime.audioLevels} set={setDraft}/>}
+      {tab === 'audio' && <AudioPanel config={draft} runtime={state.runtime} set={setDraft}/>}
       {tab === 'outputs' && <OutputsPanel config={draft} set={setDraft}/>}
       {tab === 'chat' && <ChatPanel messages={state.chat}/>}
       {tab === 'settings' && <SettingsPanel config={draft} set={setDraft}/>}

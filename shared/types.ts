@@ -12,8 +12,13 @@ export interface TextSource extends SceneSourceBase { kind: 'text'; text: string
 export type SceneSource = CameraSource | ImageSource | TextSource;
 export interface Scene { id: string; name: string; sources: SceneSource[]; }
 
-/** Stored so later processing stages can be added without a config break. The current graph does not apply filters. */
-export interface AudioFilter { id: string; type: string; enabled: boolean; }
+/** Applied before the source fader. 0 dB is unity. */
+export interface GainAudioFilter { id: string; type: 'gain'; enabled: boolean; gainDb: number; }
+
+/** Preserved for a later processing stage. The graph does not apply these. */
+export interface StoredAudioFilter { id: string; type: string; enabled: boolean; }
+
+export type AudioFilter = GainAudioFilter | StoredAudioFilter;
 
 export interface AudioSource {
   id: string;
@@ -51,6 +56,8 @@ export interface RuntimeStats {
   lastError: string | null;
   pid: number | null;
   audioLevels: Record<string, AudioLevel>;
+  /** Why a source was left out of the graph that is running or was just started. */
+  audioNotices: string[];
 }
 
 export interface ChatMessage { id: string; platform: Platform; username: string; text: string; timestamp: number; color?: string; }

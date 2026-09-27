@@ -27,21 +27,31 @@ async function output(args: string[]): Promise<{ stdout: string; stderr: string 
 
 function unique(values: string[]) { return [...new Set(values.map(v => v.trim()).filter(Boolean))]; }
 
+/** DirectShow listings differ by FFmpeg version: section headers, or `"Name" (audio|video)` on FFmpeg 7/9. */
+export function parseDshowDevices(stderr: string): { video: string[]; audio: string[] } {
+  const video: string[] = [];
+  const audio: string[] = [];
+  let section: 'video' | 'audio' | null = null;
+  for (const raw of stderr.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (/Alternative name/i.test(line)) continue;
+    const tagged = /"([^"]+)"\s+\((video|audio)\)$/.exec(line);
+    if (tagged?.[1] && tagged[2]) {
+      (tagged[2] === 'video' ? video : audio).push(tagged[1]);
+      continue;
+    }
+    if (/DirectShow video devices/i.test(line)) { section = 'video'; continue; }
+    if (/DirectShow audio devices/i.test(line)) { section = 'audio'; continue; }
+    const name = /"([^"]+)"/.exec(line)?.[1];
+    if (name && section) (section === 'video' ? video : audio).push(name);
+  }
+  return { video: unique(video), audio: unique(audio) };
+}
+
 async function devices(): Promise<{ video: string[]; audio: string[] }> {
   if (process.platform === 'win32') {
     const { stderr } = await output(['-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy']);
-    const video: string[] = [];
-    const audio: string[] = [];
-    let section: 'video' | 'audio' | null = null;
-    for (const line of stderr.split(/\r?\n/)) {
-      if (/DirectShow video devices/i.test(line)) section = 'video';
-      else if (/DirectShow audio devices/i.test(line)) section = 'audio';
-      else {
-        const name = /"([^"]+)"/.exec(line)?.[1];
-        if (name && section && !/Alternative name/i.test(line)) (section === 'video' ? video : audio).push(name);
-      }
-    }
-    return { video: unique(video), audio: unique(audio) };
+    return parseDshowDevices(stderr);
   }
   if (process.platform === 'darwin') {
     const { stderr } = await output(['-hide_banner', '-f', 'avfoundation', '-list_devices', 'true', '-i', '']);

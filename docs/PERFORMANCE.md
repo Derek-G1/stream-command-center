@@ -15,4 +15,4 @@ These are engineering targets, not guaranteed figures; benchmark on each support
 
 ## Required telemetry
 
-Runtime exposes encoder PID, state, and, once FFmpeg's `-progress` stream sends them, FPS, bitrate, encode speed, and `drop_frames`. Missing samples stay null and the UI shows N/A. Per-source audio meters come from `astats` on the running graph. Future native telemetry should add capture time, composite time, encode latency, network drops, GPU copy count, per-source CPU/GPU cost, and memory.
+Runtime exposes encoder PID, state, and, once FFmpeg's `-progress` stream sends them, FPS, bitrate, encode speed, and `drop_frames`. Missing samples stay null and the UI shows N/A. Per-source audio meters come from `astats` on the post-fader branch, after Gain, volume, and mute. A null RMS inside a received sample is measured silence (`-inf`), not a missing sample. Future native telemetry should add capture time, composite time, encode latency, network drops, GPU copy count, per-source CPU/GPU cost, and memory.

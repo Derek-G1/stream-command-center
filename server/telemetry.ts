@@ -57,7 +57,7 @@ export function consumeAudioMeters(levels: Record<string, AudioLevel>, chunk: st
   carry.buf = lines.pop() ?? '';
   let changed = false;
   for (const raw of lines) {
-    const line = raw.trim();
+    const line = raw.trim().replace(/^\[[^\]]*\]\s*/, '');
     const src = /^lc\.src=(.+)$/.exec(line);
     if (src?.[1]) { carry.sourceId = src[1]; continue; }
     const rms = /^lavfi\.astats\.Overall\.RMS_level=(.+)$/.exec(line);

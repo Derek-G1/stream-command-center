@@ -15,7 +15,7 @@ export const DEFAULT_CONFIG: BroadcastConfig = {
 };
 
 export const EMPTY_RUNTIME: RuntimeStats = {
-  state: 'idle', startedAt: null, fps: null, bitrateKbps: null, droppedFrames: null, speed: null, lastError: null, pid: null, audioLevels: {},
+  state: 'idle', startedAt: null, fps: null, bitrateKbps: null, droppedFrames: null, speed: null, lastError: null, pid: null, audioLevels: {}, audioNotices: [],
 };
 
 export const cloneConfig = (value: BroadcastConfig): BroadcastConfig => structuredClone(value);

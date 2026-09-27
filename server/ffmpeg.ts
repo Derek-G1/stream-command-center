@@ -3,12 +3,13 @@ import { join, resolve } from 'node:path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { BroadcastConfig, RuntimeStats, SceneSource } from '../shared/types';
 import { EMPTY_RUNTIME } from '../shared/defaults';
-import { audioGraph, capturableAudio } from './audio';
+import { audioGraph, capturableAudio, planAudioCapture } from './audio';
+import { probeSystem } from './system';
 import { consumeAudioMeters, consumeProgress, lineCarry, type LineCarry } from './telemetry';
 
 type Update = (stats: RuntimeStats) => void;
 
-const freshRuntime = (patch: Partial<RuntimeStats> = {}): RuntimeStats => ({ ...EMPTY_RUNTIME, audioLevels: {}, ...patch });
+const freshRuntime = (patch: Partial<RuntimeStats> = {}): RuntimeStats => ({ ...EMPTY_RUNTIME, audioLevels: {}, audioNotices: [], ...patch });
 
 export class BroadcastEngine {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -22,11 +23,15 @@ export class BroadcastEngine {
     if (this.child) throw new Error('Broadcast is already running.');
     const enabled = config.destinations.filter(d => d.enabled && d.url && d.streamKey);
     if (enabled.length === 0 && !config.recording.enabled) throw new Error('Enable at least one stream destination or recording.');
+    const probe = await probeSystem();
+    if (!probe.ffmpegInstalled) throw new Error('FFmpeg is not installed or not on PATH. Install FFmpeg or set FFMPEG_PATH, then try again.');
+    const plan = planAudioCapture(config.audio.sources, process.platform, probe);
+    const graphConfig = { ...config, audio: { ...config.audio, sources: plan.sources } };
     if (config.recording.enabled) await mkdir(resolve(config.recording.directory), { recursive: true });
-    const args = buildArgs(config);
+    const args = buildArgs(graphConfig);
     this.progress = lineCarry();
     this.meters = lineCarry();
-    this.stats = freshRuntime({ state: 'starting', startedAt: Date.now() });
+    this.stats = freshRuntime({ state: 'starting', startedAt: Date.now(), audioNotices: plan.notices });
     this.emit();
     const child = spawn(process.env.FFMPEG_PATH || 'ffmpeg', args, { windowsHide: true });
     this.child = child;
@@ -81,7 +86,7 @@ export class BroadcastEngine {
   }
   private resolveExited() { for (const done of [...this.exitWaiters]) done(); }
   private set(next: RuntimeStats) { this.stats = next; this.emit(); }
-  private emit() { this.update({ ...this.stats, audioLevels: { ...this.stats.audioLevels } }); }
+  private emit() { this.update({ ...this.stats, audioLevels: { ...this.stats.audioLevels }, audioNotices: [...this.stats.audioNotices] }); }
 }
 
 function encoderArgs(c: BroadcastConfig): string[] {
@@ -167,7 +172,8 @@ export function buildArgs(c: BroadcastConfig, platform: NodeJS.Platform = proces
     const file = join(resolve(c.recording.directory), `litecast-${stamp}.${c.recording.format}`);
     sinks.push(`[f=${c.recording.format === 'mkv' ? 'matroska' : 'mp4'}:onfail=ignore]${escapeTee(file)}`);
   }
-  out.push('-f', 'tee', sinks.join('|'));
+  // Tee writes the Matroska/FLV header before NVENC emits in-band extradata. The global header has to exist or the output is empty.
+  out.push('-flags', '+global_header', '-f', 'tee', sinks.join('|'));
   return out;
 }
 

@@ -25,10 +25,10 @@ LiteCast is the next-generation direction of Stream Command Center: a lightweigh
 - Midnight, OLED and Light themes plus compact/comfortable density.
 - 1080p/720p quality presets.
 - FFmpeg capability probe for NVENC/QSV/AMF/x264 availability.
-- Best-effort FFmpeg video/audio device discovery on Windows and macOS, with manual device strings still supported.
+- FFmpeg video and audio device discovery on Windows and macOS. Windows DirectShow names are listed when the installed FFmpeg prints them. A saved device that is no longer present stays selected and is marked unavailable. Manual device strings remain the fallback when enumeration returns nothing.
 - Import/export of broadcaster configuration.
 - Runtime status over Server-Sent Events: process state, PID, FPS, bitrate, encode speed, and FFmpeg `drop_frames` once a progress sample arrives. Unmeasured stats stay blank instead of showing a fake zero.
-- Multiple microphone inputs, plus desktop loopback where the capture backend supports it, with mute, volume, and levels measured from the running encode. Application audio, media-source audio, and audio filters are not applied yet.
+- Multiple microphone inputs, plus desktop loopback where the capture backend supports it, with mute, volume, post-fader RMS, and Gain. Gain is decibels from -30 to +30, where 0 dB is no change, and it runs before the volume fader. Noise suppression, noise gate, compressor, limiter, monitoring, sync offset, application audio, and media-source audio are not applied yet.
 - Performance/error panel.
 
 ### Multiplatform chat
@@ -85,7 +85,7 @@ The control surface opens at `http://127.0.0.1:8790`.
 1. Open **Settings**. LiteCast probes FFmpeg and marks hardware encoders it can see.
 2. Choose a video preset or set resolution/FPS/bitrate manually.
 3. Select Desktop, Window, or Device for the base capture.
-4. Open **Audio** and add a microphone or, where available, desktop audio. Leave this empty for a silent broadcast.
+4. Open **Audio** and add a microphone or, where available, desktop audio. Choose a detected device; nothing is selected for you. Gain, when you add it, is a dB trim before the fader. The meter is post-fader. Leave audio empty for a silent broadcast.
 5. Open **Studio**. Add scenes plus optional Camera, Image, and Text overlays.
 6. Open **Outputs**. Add the RTMP/RTMPS ingest URL and stream key for each service. The platform name labels the ingest; it does not connect an account.
 7. Enable **Recording** only if you want a local file. The header shows Stream and Record before you start.

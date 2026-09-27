@@ -32,7 +32,19 @@ FFmpeg
 
 ## Audio
 
-The config stores a list of audio sources. Each source has an id, name, kind, enabled flag, mute, volume, device, and a `filters` array. The current FFmpeg graph applies mute and volume for microphone inputs and, where the platform capture supports it, desktop loopback. It prints `astats` RMS and peak for those sources. It does not apply the stored filters. Application audio and media-source audio are accepted in config and skipped by the graph. Gain, monitoring, and sync offset are not config fields yet; add them when the graph can honor them.
+The config stores a list of audio sources. Each source has an id, name, kind, enabled flag, mute, volume, device, and a `filters` array. Microphone capture uses the platform audio input (DirectShow on Windows). Desktop loopback is captured only when that backend exists: WASAPI on Windows, Pulse on Linux. Application audio and media-source audio are accepted in config and skipped by the graph.
+
+The only filter the graph applies is Gain, in decibels, from -30 dB to +30 dB. 0 dB is unity. Other stored filter types are kept and ignored. Each source has at most one Gain filter. The chain for every captured source is:
+
+```text
+input -> format -> enabled Gain -> future pre-fader filters -> volume -> mute -> split
+                                                                              |-> post-fader astats meter
+                                                                              |-> mixer
+```
+
+The displayed RMS meter is post-fader. It is measured after Gain, the volume fader, and mute, on the signal that enters the mixer. A muted source therefore measures as digital silence once a sample arrives. `N/A` means no `astats` sample has arrived. A numeric value, including `0.0 dB`, is a real measurement. FFmpeg's `-inf` is stored as null and shown as Silence, which is not the same as `N/A`.
+
+If device enumeration succeeds and a saved device is absent, that source is left out of the graph, the saved name is kept, and the broadcast continues. The same happens for Windows desktop audio when FFmpeg has no WASAPI demuxer. A device that disappears after FFmpeg has already opened it still ends that process; DirectShow does not keep the other outputs alive through an input failure. An empty device list means enumeration did not answer, so a typed device string is still passed through.
 
 ## Resource rules
 

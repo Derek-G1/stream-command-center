@@ -40,3 +40,13 @@ test('audio meter parser attaches measurements to the printed source', () => {
   assert.equal(levels['mic-1'].rmsDb, null);
   assert.equal(levels['mic-1'].peakDb, -6.25);
 });
+
+test('audio meter parser keeps a real zero and tolerates log prefixes and split lines', () => {
+  const levels: Record<string, { rmsDb: number | null; peakDb: number | null }> = {};
+  const carry = lineCarry();
+  consumeAudioMeters(levels, '[Parsed_ametadata_1 @ 0001] lc.src=mic\n[Parsed_ametadata_1 @ 0001] lavfi.astats.Overall.RMS_level=0\n', carry);
+  assert.deepEqual(levels.mic, { rmsDb: 0, peakDb: null });
+  consumeAudioMeters(levels, 'lc.src=mic\nlavfi.astats.Overall.RM', carry);
+  consumeAudioMeters(levels, 'S_level=-12.5\nlavfi.astats.Overall.Peak_level=-3\n', carry);
+  assert.deepEqual(levels.mic, { rmsDb: -12.5, peakDb: -3 });
+});

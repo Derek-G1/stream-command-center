@@ -16,3 +16,18 @@ test('recording defaults off and preview fps is not a setting',()=>{assert.equal
 test('legacy single audio device migrates to one microphone source',()=>{const c=normalize({audio:{enabled:true,device:'Mic',bitrateKbps:128,sampleRate:44100,volume:0.5}});assert.equal(c.audio.sources.length,1);assert.equal(c.audio.sources[0]!.kind,'microphone');assert.equal(c.audio.sources[0]!.device,'Mic');assert.equal(c.audio.sources[0]!.volume,0.5);assert.equal(c.audio.sources[0]!.muted,false);assert.equal(c.audio.bitrateKbps,128);assert.equal(c.audio.sampleRate,44100);});
 
 test('audio normalizer limits sources and keeps stored filters',()=>{const c=normalize({audio:{sources:Array.from({length:12},(_,i)=>({id:`a${i}`,name:'A',kind:i===11?'nope':'microphone',enabled:true,muted:false,volume:9,device:'D',filters:[{id:'g',type:'gate',enabled:true}]}))}});assert.equal(c.audio.sources.length,8);assert.equal(c.audio.sources[0]!.volume,2);assert.deepEqual(c.audio.sources[0]!.filters,[{id:'g',type:'gate',enabled:true}]);});
+
+test('gain is clamped, serialized, and not duplicated', () => {
+  const c = normalize({ audio: { sources: [{ id: 'mic', name: 'Mic', kind: 'microphone', enabled: true, muted: false, volume: 1, device: '  Chat Mic  ', filters: [{ id: 'hot', type: 'gain', enabled: true, gainDb: 80 }, { id: 'again', type: 'gain', enabled: true, gainDb: -6 }, { id: 'gate', type: 'gate', enabled: true }, { type: 'gain', enabled: 'yes', gainDb: 'loud' }] }] } });
+  assert.equal(c.audio.sources[0]!.device, 'Chat Mic');
+  assert.deepEqual(c.audio.sources[0]!.filters, [{ id: 'hot', type: 'gain', enabled: true, gainDb: 30 }, { id: 'gate', type: 'gate', enabled: true }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.audio.sources[0]!.filters)), c.audio.sources[0]!.filters);
+  const low = normalize({ audio: { sources: [{ id: 'mic', name: 'Mic', kind: 'microphone', enabled: true, muted: false, volume: 1, device: 'Mic', filters: [{ id: 'g', type: 'gain', enabled: false, gainDb: -80.04 }] }] } });
+  assert.deepEqual(low.audio.sources[0]!.filters, [{ id: 'g', type: 'gain', enabled: false, gainDb: -30 }]);
+  const tenth = normalize({ audio: { sources: [{ id: 'mic', name: 'Mic', kind: 'microphone', enabled: true, muted: false, volume: 1, device: 'Mic', filters: [{ id: 'g', type: 'gain', enabled: true, gainDb: -6.05 }] }] } });
+  assert.equal(tenth.audio.sources[0]!.filters[0] && 'gainDb' in tenth.audio.sources[0]!.filters[0] ? tenth.audio.sources[0]!.filters[0].gainDb : null, -6.1);
+  const broken = normalize({ audio: { sources: [{ id: 'mic', name: 'Mic', kind: 'microphone', enabled: true, muted: false, volume: 1, device: 'Mic', filters: { type: 'gain' } }] } });
+  assert.deepEqual(broken.audio.sources[0]!.filters, []);
+  const malformed = normalize({ audio: { sources: [{ id: 'mic', name: 'Mic', kind: 'microphone', enabled: true, muted: false, volume: 1, device: 'Mic', filters: [{ id: 'g', type: 'gain', enabled: 'yes', gainDb: 'loud' }] }] } });
+  assert.deepEqual(malformed.audio.sources[0]!.filters, [{ id: 'g', type: 'gain', enabled: false, gainDb: 0 }]);
+});
