@@ -1,31 +1,61 @@
 # LiteCast Broadcaster
 
-LiteCast is the next-generation direction of Stream Command Center: a lightweight, highly customizable broadcaster that keeps the rich UI separate from the performance-critical media pipeline.
+LiteCast is the next-generation direction of Stream Command Center: a lightweight, highly customizable broadcaster that keeps the rich control UI separate from the performance-critical media pipeline.
 
-> Branch status: this is a functional **0.1 broadcaster MVP**, not yet a drop-in replacement for every OBS feature. Screen/window/device capture, recording and compatible RTMP multistreaming work through FFmpeg today. Scene composition, production OAuth flows and native GPU capture are explicitly staged in the roadmap rather than falsely marked complete.
+> **Current status:** functional **0.1 broadcaster MVP**. It can capture, compose scenes, record, multistream one compatible encode to multiple RTMP/RTMPS services, and aggregate Twitch/YouTube chat. It is **not yet a complete OBS replacement**: the long-term native GPU compositor, production OAuth/credential-vault flows, advanced audio mixer, transitions, and Kick/Facebook chat event integrations remain release-roadmap work.
 
 ## What works now
 
-- Vite + Preact + Tailwind customizable control surface.
-- Midnight/OLED/light themes and density setting.
-- Local-only Node control plane bound to `127.0.0.1` with host/origin protections.
-- Desktop, window and device capture through FFmpeg (platform-specific FFmpeg capture backends).
-- NVIDIA NVENC, Intel QSV, AMD AMF and x264 encoder selection.
-- 1080p60-style configurable resolution/FPS/bitrate/keyframe interval.
-- Record to MKV or MP4.
-- Multistream to Twitch/YouTube/Kick/Facebook/custom RTMP endpoints by **encoding once and using FFmpeg's tee muxer** for compatible outputs.
-- Broadcast runtime status over Server-Sent Events.
-- Unified-chat model with Twitch IRC WebSocket and YouTube live-chat adapters.
-- Persistent local config with normalization and atomic-ish file writes.
-- Native Rust `litecast-engine` wrapper that can validate/print/run the same style of FFmpeg broadcast config.
+### Broadcasting
+
+- Desktop, window and capture-device input through FFmpeg.
+- Scene collection with an active scene.
+- Camera, image and text overlay sources with position, size and opacity controls.
+- Lightweight layout preview in the Studio UI.
+- Controlled **Apply live** restart when the active FFmpeg media graph changes.
+- NVIDIA NVENC, Intel QSV, AMD AMF and software x264 encoder profiles.
+- Configurable resolution, FPS, bitrate and keyframe interval.
+- Local MKV or MP4 recording.
+- Multistream to Twitch, YouTube, Kick, Facebook or any custom RTMP/RTMPS target by **encoding once and using FFmpeg's tee muxer** for compatible destinations.
+- A failed tee destination uses `onfail=ignore`, so one output does not intentionally take down every other output.
+
+### Control UI
+
+- Vite + Preact + Tailwind control surface; no Electron shell.
+- Midnight, OLED and Light themes plus compact/comfortable density.
+- 1080p/720p quality presets.
+- FFmpeg capability probe for NVENC/QSV/AMF/x264 availability.
+- Best-effort FFmpeg video/audio device discovery on Windows and macOS, with manual device strings still supported.
+- Import/export of broadcaster configuration.
+- Runtime status over Server-Sent Events: process state, PID, FPS, bitrate and encode speed.
+- Performance/error panel.
+
+### Multiplatform chat
+
+- Unified private streamer chat model.
+- Twitch IRC-over-WebSocket adapter with automatic reconnect.
+- YouTube live-chat adapter with page-token/message-ID deduplication.
+- Framework-free viewer chat overlay with `?platform=twitch`, `?platform=youtube`, or `?platform=all` filtering.
+- Separate chat connection settings so credentials never have to be embedded in scene files.
+
+### Reliability / engineering
+
+- Local-only control plane bound to `127.0.0.1`.
+- Host/origin protections against cross-site writes and basic DNS-rebinding paths.
+- Persistent normalized configuration with limits on scenes, sources and outputs.
+- RTMP destinations restricted to `rtmp://` or `rtmps://`.
+- Atomic-style JSON writes using temp files + rename.
+- Native Rust `litecast-engine` migration boundary/standalone FFmpeg runner.
 - Automated Node tests and cross-platform Rust CI.
+- CI currently checks TypeScript, tests, production Vite build, and Rust on Windows/macOS/Linux.
 
 ## Requirements
 
 - Node.js 22+
-- FFmpeg available on PATH (or `FFMPEG_PATH` set)
-- A supported capture environment. Windows is the first-class current target.
-- Stream ingest URL + stream key from each destination.
+- FFmpeg available on `PATH` (or set `FFMPEG_PATH`)
+- A supported capture environment; Windows is the first-class current target
+- Stream ingest URL + stream key for each streaming destination
+- Platform credentials only when you enable that platform's chat adapter
 
 ## Run
 
@@ -47,57 +77,84 @@ npm run engine:check
 npm run engine:build
 ```
 
-The server opens at `http://127.0.0.1:8790`.
+The control surface opens at `http://127.0.0.1:8790`.
 
 ## First stream
 
-1. Open **Settings** and choose the encoder that exists on your machine. NVIDIA users should start with NVENC.
-2. In **Studio**, choose Desktop/Window/Device and enter an audio device name if you want microphone/desktop audio.
-3. Open **Outputs** and add the RTMP/RTMPS ingest URL and stream key for each service.
-4. Leave Recording enabled if you want a local copy.
-5. Save, then press **Go Live**.
-6. Watch the header/Performance panel for FPS, bitrate, speed and encoder process state.
-
-To discover Windows FFmpeg devices, run:
-
-```powershell
-ffmpeg -list_devices true -f dshow -i dummy
-```
+1. Open **Settings**. LiteCast probes FFmpeg and marks hardware encoders it can see.
+2. Choose a video preset or set resolution/FPS/bitrate manually.
+3. Select Desktop, Window, or Device for the base capture and choose/enter your audio device.
+4. Open **Studio**. Add scenes plus optional Camera, Image, and Text overlays.
+5. Open **Outputs**. Add the RTMP/RTMPS ingest URL and stream key for each service.
+6. Keep Recording enabled if you also want a local copy.
+7. **Save**, then press **Go Live**.
+8. If you alter the media graph while live, use **Apply live** for a controlled restart with the new graph.
+9. Watch **Performance** for FPS, bitrate, speed and encoder errors.
 
 ## Multistream design
 
 ```text
-capture -> scale/format -> one H.264 encode -> tee muxer
-                                         |-> Twitch
-                                         |-> YouTube
-                                         |-> Kick
-                                         |-> Facebook
-                                         `-> local recording
+base capture + scene overlays + audio
+                 |
+                 v
+          FFmpeg composition
+                 |
+          one H.264/AAC encode
+                 |
+              tee muxer
+        /        |        \
+   Twitch     YouTube     Kick ...
+                 |
+           local recording
 ```
 
-A second encode is only appropriate when a destination actually needs a different codec/resolution/bitrate/layout.
+A second encode should only be introduced when a destination genuinely requires a different codec, bitrate, resolution, orientation or composition.
+
+## Chat overlay
+
+Examples:
+
+```text
+http://127.0.0.1:8790/chat-overlay/?platform=twitch
+http://127.0.0.1:8790/chat-overlay/?platform=youtube
+http://127.0.0.1:8790/chat-overlay/?platform=all
+```
+
+The combined chat is intended primarily for the private streamer dashboard. When a platform's simulcast policy restricts showing other platforms' activity on its output, use the per-platform overlay instead.
 
 ## Security
 
-- The server listens only on `127.0.0.1`.
+- The HTTP server listens only on `127.0.0.1`.
 - Cross-site state-changing requests are rejected by host/origin checks.
 - `data/`, `.env`, recordings and build artifacts are gitignored.
-- Stream keys and chat credentials stay local. The current MVP persists chat credentials in the local gitignored data directory; OS credential-vault integration is required before a public production release.
+- Stream URLs are validated as RTMP/RTMPS before they reach FFmpeg.
+- Chat tokens and stream keys stay local.
+- **Before a public production release**, sensitive tokens should move from gitignored local JSON to the operating-system credential vault. Gitignore is useful, but it is not a secret-storage system.
 
 ## Project map
 
-- `server/` — lightweight local HTTP/SSE control plane, config, FFmpeg process, chat adapters.
-- `web/` — Vite/Preact/Tailwind control UI.
-- `shared/` — shared config/state types and defaults.
+- `server/` — local HTTP/SSE control plane, config validation, FFmpeg process, capability probe and chat adapters.
+- `web/` — Vite/Preact/Tailwind studio UI plus framework-free chat overlay.
+- `shared/` — config/state/source types and defaults.
 - `engine/` — native Rust process wrapper/migration boundary.
-- `tests/` — config and single-encode/multistream regression tests.
+- `tests/` — config and media-graph/multistream regression tests.
 - `docs/` — architecture, platform capabilities, performance budgets and roadmap.
 
 See `docs/ARCHITECTURE.md`, `docs/PLATFORMS.md`, `docs/PERFORMANCE.md` and `docs/ROADMAP.md`.
 
 ## Why this is not Electron
 
-The browser-based control panel is served locally and can be closed while the encoder keeps running. The broadcaster does not embed a permanent Chromium desktop shell just to draw its controls. Future browser sources will be isolated and loaded only when actually used.
+The browser-based control panel is served locally and can be closed while the encoder keeps running. LiteCast does not embed a permanent Chromium desktop shell merely to draw controls. A future browser-source subsystem should be isolated and launched only when a scene actually needs one.
+
+## 1.0 direction
+
+The current FFmpeg backend is intentionally useful now. The performance target is still a native pipeline:
+
+```text
+platform capture -> GPU texture -> wgpu compositor -> hardware encoder surface -> mux/output
+```
+
+with zero/low-copy handoff where the platform permits it and FFmpeg retained as a compatibility/fallback backend.
 
 ## License
 
