@@ -6,10 +6,30 @@ import { EMPTY_RUNTIME } from '../shared/defaults';
 
 type Update = (stats: RuntimeStats) => void;
 export class BroadcastEngine {
-  private child: ChildProcessWithoutNullStreams | null = null; private stats: RuntimeStats = { ...EMPTY_RUNTIME };
-  constructor(private update: Update) {} snapshot(){return this.stats;}
-  async start(config:BroadcastConfig){if(this.child)throw new Error('Broadcast is already running.');const enabled=config.destinations.filter(d=>d.enabled&&d.url&&d.streamKey);if(enabled.length===0&&!config.recording.enabled)throw new Error('Enable at least one stream destination or recording.');if(config.recording.enabled)await mkdir(resolve(config.recording.directory),{recursive:true});const args=buildArgs(config);this.set({...EMPTY_RUNTIME,state:'starting',startedAt:Date.now()});const child=spawn(process.env.FFMPEG_PATH||'ffmpeg',args,{windowsHide:true});this.child=child;this.stats.pid=child.pid??null;this.emit();let stderr='';child.stderr.setEncoding('utf8');child.stderr.on('data',(chunk:string)=>{stderr=(stderr+chunk).slice(-12000);parseProgress(chunk,this.stats);if(this.stats.state==='starting'&&/frame=\s*\d+/.test(chunk))this.stats.state='live';this.emit();});child.on('error',err=>{this.child=null;this.set({...this.stats,state:'error',lastError:err.message,pid:null});});child.on('exit',(code,signal)=>{const wasStopping=this.stats.state==='stopping';this.child=null;if(wasStopping||code===0)this.set({...EMPTY_RUNTIME});else this.set({...this.stats,state:'error',pid:null,lastError:`FFmpeg exited with code ${code??'null'}${signal?` (${signal})`:''}. ${tailError(stderr)}`});});return this.snapshot();}
-  async stop(){if(!this.child)return this.snapshot();this.stats.state='stopping';this.emit();this.child.stdin.write('q\n');const child=this.child;setTimeout(()=>{if(this.child===child)child.kill('SIGTERM');},5000).unref();return this.snapshot();}
+  private child: ChildProcessWithoutNullStreams | null = null;
+  private stats: RuntimeStats = { ...EMPTY_RUNTIME };
+  private exitWaiters = new Set<() => void>();
+  constructor(private update: Update) {}
+  snapshot(){return this.stats;}
+  async start(config:BroadcastConfig){
+    if(this.child)throw new Error('Broadcast is already running.');
+    const enabled=config.destinations.filter(d=>d.enabled&&d.url&&d.streamKey);
+    if(enabled.length===0&&!config.recording.enabled)throw new Error('Enable at least one stream destination or recording.');
+    if(config.recording.enabled)await mkdir(resolve(config.recording.directory),{recursive:true});
+    const args=buildArgs(config);this.set({...EMPTY_RUNTIME,state:'starting',startedAt:Date.now()});
+    const child=spawn(process.env.FFMPEG_PATH||'ffmpeg',args,{windowsHide:true});this.child=child;this.stats.pid=child.pid??null;this.emit();let stderr='';
+    child.stderr.setEncoding('utf8');child.stderr.on('data',(chunk:string)=>{stderr=(stderr+chunk).slice(-12000);parseProgress(chunk,this.stats);if(this.stats.state==='starting'&&/frame=\s*\d+/.test(chunk))this.stats.state='live';this.emit();});
+    child.on('error',err=>{if(this.child===child)this.child=null;this.set({...this.stats,state:'error',lastError:err.message,pid:null});this.resolveExited();});
+    child.on('exit',(code,signal)=>{const wasStopping=this.stats.state==='stopping';if(this.child===child)this.child=null;if(wasStopping||code===0)this.set({...EMPTY_RUNTIME});else this.set({...this.stats,state:'error',pid:null,lastError:`FFmpeg exited with code ${code??'null'}${signal?` (${signal})`:''}. ${tailError(stderr)}`});this.resolveExited();});
+    return this.snapshot();
+  }
+  async stop(){
+    const child=this.child;if(!child)return this.snapshot();this.stats.state='stopping';this.emit();
+    const exited=this.waitForExit(7000);child.stdin.write('q\n');setTimeout(()=>{if(this.child===child)child.kill('SIGTERM');},4500).unref();await exited;return this.snapshot();
+  }
+  async restart(config:BroadcastConfig){if(this.child)await this.stop();return this.start(config);}
+  private waitForExit(timeout:number){return new Promise<void>(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);this.exitWaiters.delete(finish);resolve();};const timer=setTimeout(finish,timeout);timer.unref();this.exitWaiters.add(finish);});}
+  private resolveExited(){for(const done of [...this.exitWaiters])done();}
   private set(next:RuntimeStats){this.stats=next;this.emit();} private emit(){this.update({...this.stats});}
 }
 
