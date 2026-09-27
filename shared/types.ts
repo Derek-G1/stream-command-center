@@ -1,6 +1,7 @@
 export type Encoder = 'nvenc' | 'qsv' | 'amf' | 'software';
 export type CaptureKind = 'desktop' | 'window' | 'device';
 export type Platform = 'twitch' | 'youtube' | 'kick' | 'facebook' | 'custom';
+export type SourceKind = 'camera' | 'image' | 'text';
 
 export interface Destination {
   id: string;
@@ -10,6 +11,23 @@ export interface Destination {
   url: string;
   streamKey: string;
 }
+
+export interface SceneSourceBase {
+  id: string;
+  name: string;
+  kind: SourceKind;
+  enabled: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+}
+export interface CameraSource extends SceneSourceBase { kind: 'camera'; device: string; }
+export interface ImageSource extends SceneSourceBase { kind: 'image'; path: string; }
+export interface TextSource extends SceneSourceBase { kind: 'text'; text: string; fontSize: number; color: string; }
+export type SceneSource = CameraSource | ImageSource | TextSource;
+export interface Scene { id: string; name: string; sources: SceneSource[]; }
 
 export interface BroadcastConfig {
   video: {
@@ -26,6 +44,7 @@ export interface BroadcastConfig {
     device: string;
     bitrateKbps: number;
     sampleRate: 44100 | 48000;
+    volume: number;
   };
   capture: {
     kind: CaptureKind;
@@ -33,6 +52,8 @@ export interface BroadcastConfig {
     windowTitle: string;
     device: string;
   };
+  scenes: Scene[];
+  activeSceneId: string;
   recording: {
     enabled: boolean;
     directory: string;
