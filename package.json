@@ -8,8 +8,11 @@
     "dev": "tsx watch server/main.ts --dev",
     "build": "vite build",
     "check": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
     "start": "vite build --logLevel warn && tsx server/main.ts --open",
-    "serve": "tsx server/main.ts --open"
+    "serve": "tsx server/main.ts --open",
+    "engine:check": "cargo check --manifest-path engine/Cargo.toml",
+    "engine:build": "cargo build --release --manifest-path engine/Cargo.toml"
   },
   "dependencies": {
     "lucide-preact": "^0.468.0",
