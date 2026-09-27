@@ -9,16 +9,24 @@ const bool = (v: unknown, fallback: boolean) => typeof v === 'boolean' ? v : fal
 const hex = (v: unknown, fallback: string) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : fallback;
 const id = (v: unknown, fallback: string) => typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : fallback;
 
-function normalizeSource(raw: any, i: number): SceneSource | null {
-  if (!raw || typeof raw !== 'object' || !['camera','image','text'].includes(raw.kind)) return null;
-  const common = { id: id(raw.id, `source-${i}`), name: text(raw.name, `Source ${i+1}`, 80), kind: raw.kind, enabled: bool(raw.enabled, true), x: clamp(raw.x, -7680, 7680, 0), y: clamp(raw.y, -4320, 4320, 0), width: clamp(raw.width, 16, 7680, 640), height: clamp(raw.height, 16, 4320, 360), opacity: float(raw.opacity, 0, 1, 1) };
-  if (raw.kind === 'camera') return { ...common, kind: 'camera', device: text(raw.device, '', 512) };
-  if (raw.kind === 'image') return { ...common, kind: 'image', path: text(raw.path, '', 2048) };
-  return { ...common, kind: 'text', text: text(raw.text, 'Text', 500), fontSize: clamp(raw.fontSize, 8, 300, 48), color: hex(raw.color, '#ffffff') };
+function normalizeSource(raw: unknown, i: number): SceneSource | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  if (!['camera','image','text'].includes(String(value.kind))) return null;
+  const kind = value.kind as SceneSource['kind'];
+  const common = { id: id(value.id, `source-${i}`), name: text(value.name, `Source ${i+1}`, 80), kind, enabled: bool(value.enabled, true), x: clamp(value.x, -7680, 7680, 0), y: clamp(value.y, -4320, 4320, 0), width: clamp(value.width, 16, 7680, 640), height: clamp(value.height, 16, 4320, 360), opacity: float(value.opacity, 0, 1, 1) };
+  if (kind === 'camera') return { ...common, kind: 'camera', device: text(value.device, '', 512) };
+  if (kind === 'image') return { ...common, kind: 'image', path: text(value.path, '', 2048) };
+  return { ...common, kind: 'text', text: text(value.text, 'Text', 500), fontSize: clamp(value.fontSize, 8, 300, 48), color: hex(value.color, '#ffffff') };
 }
 function normalizeScenes(value: unknown, fallback: Scene[]): Scene[] {
   if (!Array.isArray(value)) return fallback;
-  const scenes = value.slice(0, 24).map((s:any, i): Scene => ({ id: id(s?.id, `scene-${i}`), name: text(s?.name, `Scene ${i+1}`, 80), sources: Array.isArray(s?.sources) ? s.sources.slice(0, 32).map(normalizeSource).filter((x): x is SceneSource => !!x) : [] }));
+  const scenes = value.slice(0, 24).map((raw: unknown, i): Scene => {
+    const s = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const rawSources: unknown[] = Array.isArray(s.sources) ? s.sources : [];
+    const sources = rawSources.slice(0, 32).map((source, sourceIndex) => normalizeSource(source, sourceIndex)).filter((source): source is SceneSource => source !== null);
+    return { id: id(s.id, `scene-${i}`), name: text(s.name, `Scene ${i+1}`, 80), sources };
+  });
   return scenes.length ? scenes : fallback;
 }
 
@@ -27,7 +35,7 @@ export function normalize(input: unknown, base = DEFAULT_CONFIG): BroadcastConfi
   const video = x.video ?? base.video; const audio = x.audio ?? base.audio; const capture = x.capture ?? base.capture; const recording = x.recording ?? base.recording; const ui = x.ui ?? base.ui;
   const scenes = normalizeScenes(x.scenes, base.scenes);
   const activeSceneId = scenes.some(s => s.id === x.activeSceneId) ? x.activeSceneId! : scenes[0]!.id;
-  const destinations: Destination[] = Array.isArray(x.destinations) ? x.destinations.slice(0, 12).map((d:any, i) => ({ id: id(d?.id, `dest-${i}`), name: text(d?.name, `Destination ${i + 1}`, 64), platform: ['twitch','youtube','kick','facebook','custom'].includes(d?.platform) ? d.platform : 'custom', enabled: bool(d?.enabled, true), url: text(d?.url, '', 2048), streamKey: text(d?.streamKey, '', 2048) })) : base.destinations;
+  const destinations: Destination[] = Array.isArray(x.destinations) ? x.destinations.slice(0, 12).map((d: Destination, i) => ({ id: id(d?.id, `dest-${i}`), name: text(d?.name, `Destination ${i + 1}`, 64), platform: ['twitch','youtube','kick','facebook','custom'].includes(d?.platform) ? d.platform : 'custom', enabled: bool(d?.enabled, true), url: text(d?.url, '', 2048), streamKey: text(d?.streamKey, '', 2048) })) : base.destinations;
   return {
     video: { width: clamp(video.width, 320, 7680, base.video.width), height: clamp(video.height, 240, 4320, base.video.height), fps: clamp(video.fps, 1, 240, base.video.fps), bitrateKbps: clamp(video.bitrateKbps, 250, 100000, base.video.bitrateKbps), keyframeSeconds: clamp(video.keyframeSeconds, 1, 10, base.video.keyframeSeconds), encoder: ['nvenc','qsv','amf','software'].includes(video.encoder) ? video.encoder : base.video.encoder, preset: ['performance','balanced','quality'].includes(video.preset) ? video.preset : base.video.preset },
     audio: { enabled: bool(audio.enabled, base.audio.enabled), device: text(audio.device, base.audio.device, 512), bitrateKbps: clamp(audio.bitrateKbps, 64, 512, base.audio.bitrateKbps), sampleRate: audio.sampleRate === 44100 ? 44100 : 48000, volume: float(audio.volume, 0, 2, base.audio.volume) },
