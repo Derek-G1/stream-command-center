@@ -5,13 +5,15 @@
 The feature branch now includes:
 
 - Screen/window/device capture through FFmpeg.
-- Audio-device input with gain/volume control.
+- Optional local recording, off unless the user enables it.
+- Multiple microphone sources, plus desktop loopback where FFmpeg capture supports it, with mute, volume, and levels measured from the encode.
+- FFmpeg progress stats, including `drop_frames` when the progress stream reports them.
 - H.264 NVENC/QSV/AMF/x264 encoder profiles.
-- Local MKV/MP4 recording.
+- MKV or MP4 recording when the user enables it.
 - Single-encode tee multistream to compatible RTMP/RTMPS destinations.
 - Scene collection + active scene.
 - Camera, image and text overlay sources with transforms and opacity.
-- Lightweight scene-layout preview.
+- Static scene-layout preview. It does not decode program video.
 - Controlled live media-graph restart.
 - Vite/Preact/Tailwind control UI with themes/density.
 - FFmpeg encoder/device capability probing.
@@ -20,17 +22,17 @@ The feature branch now includes:
 - Twitch chat with reconnect.
 - YouTube chat with page-token/message-ID deduplication.
 - Per-platform/framework-free viewer chat overlay.
-- Rust engine wrapper, Node regression tests and cross-platform CI.
+- Rust migration-boundary binary, Node regression tests, and cross-platform CI. The Node process is still the production media path.
 
 ## 0.2 — deeper studio workflow
 
-- True decoded **Preview** and **Program** surfaces with preview-to-program switching.
+- True decoded **Preview** and **Program** surfaces with preview-to-program switching. Preview rate (5/15/30) stays independent of the stream and is not a setting until that renderer exists.
 - Media/video-file source with pause/seek/loop controls.
 - Native ticker source using the OBS Ticker v3 design principles.
 - Source crop, rotation, blend mode and corner/border effects.
 - Scene transitions.
 - Configurable hotkeys.
-- Full multi-source audio mixer with per-source meters, mute, gain, sync offset and monitoring.
+- Audio processing beyond mute, volume, and measured meters: gain, noise suppression, gate, compressor, limiter, monitoring, and sync offset. The source `filters` array is reserved for that chain and is not applied yet.
 - Replay buffer.
 - Virtual camera output.
 - Better Linux device discovery through PipeWire/Pulse/V4L2 enumeration.

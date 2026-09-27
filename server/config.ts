@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG } from '../shared/defaults';
-import type { BroadcastConfig, Destination, Scene, SceneSource } from '../shared/types';
+import type { AudioFilter, AudioSource, AudioSourceKind, BroadcastConfig, Destination, Scene, SceneSource } from '../shared/types';
 import { readJson, writeJson } from './files';
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : fallback;
@@ -30,6 +30,65 @@ function normalizeSource(raw: unknown, i: number): SceneSource | null {
   if (kind === 'camera') return { ...common, kind: 'camera', device: text(value.device, '', 512) };
   if (kind === 'image') return { ...common, kind: 'image', path: text(value.path, '', 2048) };
   return { ...common, kind: 'text', text: text(value.text, 'Text', 500), fontSize: clamp(value.fontSize, 8, 300, 48), color: hex(value.color, '#ffffff') };
+}
+
+const AUDIO_KINDS = new Set<AudioSourceKind>(['microphone', 'desktop', 'application', 'media']);
+
+function normalizeFilters(value: unknown): AudioFilter[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const filters: AudioFilter[] = [];
+  for (const raw of value.slice(0, 8)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const filter = raw as Record<string, unknown>;
+    const type = text(filter.type, '', 32).replace(/[^\w-]/g, '');
+    if (!type) continue;
+    let filterId = id(filter.id, `filter-${filters.length}`);
+    while (seen.has(filterId)) filterId = id(`${filterId}-${filters.length}`, `filter-${filters.length}`);
+    seen.add(filterId);
+    filters.push({ id: filterId, type, enabled: bool(filter.enabled, false) });
+  }
+  return filters;
+}
+
+function normalizeAudioSource(raw: unknown, i: number, seen: Set<string>): AudioSource | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  const kind = String(value.kind);
+  if (!AUDIO_KINDS.has(kind as AudioSourceKind)) return null;
+  let sourceId = id(value.id, `audio-${i}`);
+  while (seen.has(sourceId)) sourceId = id(`${sourceId}-${i}`, `audio-${i}`);
+  seen.add(sourceId);
+  return {
+    id: sourceId,
+    name: text(value.name, kind === 'desktop' ? 'Desktop' : 'Microphone', 80),
+    kind: kind as AudioSourceKind,
+    enabled: bool(value.enabled, true),
+    muted: bool(value.muted, false),
+    volume: float(value.volume, 0, 2, 1),
+    device: text(value.device, '', 512).replace(/[\r\n\0]/g, ''),
+    filters: normalizeFilters(value.filters),
+  };
+}
+
+function normalizeAudioSources(audio: Record<string, unknown>, fallback: AudioSource[]): AudioSource[] {
+  if (Array.isArray(audio.sources)) {
+    const seen = new Set<string>();
+    return audio.sources.slice(0, 8).map((source, i) => normalizeAudioSource(source, i, seen)).filter((source): source is AudioSource => source !== null);
+  }
+  if ('device' in audio || 'enabled' in audio || 'volume' in audio) {
+    return [{
+      id: 'audio-legacy',
+      name: 'Microphone',
+      kind: 'microphone',
+      enabled: bool(audio.enabled, true),
+      muted: false,
+      volume: float(audio.volume, 0, 2, 1),
+      device: text(audio.device, '', 512).replace(/[\r\n\0]/g, ''),
+      filters: [],
+    }];
+  }
+  return fallback;
 }
 
 function normalizeScenes(value: unknown, fallback: Scene[]): Scene[] {
@@ -71,11 +130,9 @@ export function normalize(input: unknown, base = DEFAULT_CONFIG): BroadcastConfi
       preset: ['performance','balanced','quality'].includes(video.preset) ? video.preset : base.video.preset,
     },
     audio: {
-      enabled: bool(audio.enabled, base.audio.enabled),
-      device: text(audio.device, base.audio.device, 512).replace(/[\r\n\0]/g, ''),
       bitrateKbps: clamp(audio.bitrateKbps, 64, 512, base.audio.bitrateKbps),
       sampleRate: audio.sampleRate === 44100 ? 44100 : 48000,
-      volume: float(audio.volume, 0, 2, base.audio.volume),
+      sources: normalizeAudioSources(audio as unknown as Record<string, unknown>, base.audio.sources),
     },
     capture: {
       kind: ['desktop','window','device'].includes(capture.kind) ? capture.kind : base.capture.kind,
@@ -94,7 +151,6 @@ export function normalize(input: unknown, base = DEFAULT_CONFIG): BroadcastConfi
     ui: {
       theme: ['midnight','oled','light'].includes(ui.theme) ? ui.theme : base.ui.theme,
       density: ui.density === 'compact' ? 'compact' : 'comfortable',
-      previewFps: ui.previewFps === 5 || ui.previewFps === 30 ? ui.previewFps : 15,
     },
   };
 }

@@ -11,11 +11,11 @@ LiteCast is the next-generation direction of Stream Command Center: a lightweigh
 - Desktop, window and capture-device input through FFmpeg.
 - Scene collection with an active scene.
 - Camera, image and text overlay sources with position, size and opacity controls.
-- Lightweight layout preview in the Studio UI.
+- Static scene-layout preview in the Studio UI. It is not a decoded Preview/Program output, and it does not have a separate preview frame rate yet.
 - Controlled **Apply live** restart when the active FFmpeg media graph changes.
 - NVIDIA NVENC, Intel QSV, AMD AMF and software x264 encoder profiles.
 - Configurable resolution, FPS, bitrate and keyframe interval.
-- Local MKV or MP4 recording.
+- Optional local MKV or MP4 recording. Recording is off until you enable it.
 - Multistream to Twitch, YouTube, Kick, Facebook or any custom RTMP/RTMPS target by **encoding once and using FFmpeg's tee muxer** for compatible destinations.
 - A failed tee destination uses `onfail=ignore`, so one output does not intentionally take down every other output.
 
@@ -27,7 +27,8 @@ LiteCast is the next-generation direction of Stream Command Center: a lightweigh
 - FFmpeg capability probe for NVENC/QSV/AMF/x264 availability.
 - Best-effort FFmpeg video/audio device discovery on Windows and macOS, with manual device strings still supported.
 - Import/export of broadcaster configuration.
-- Runtime status over Server-Sent Events: process state, PID, FPS, bitrate and encode speed.
+- Runtime status over Server-Sent Events: process state, PID, FPS, bitrate, encode speed, and FFmpeg `drop_frames` once a progress sample arrives. Unmeasured stats stay blank instead of showing a fake zero.
+- Multiple microphone inputs, plus desktop loopback where the capture backend supports it, with mute, volume, and levels measured from the running encode. Application audio, media-source audio, and audio filters are not applied yet.
 - Performance/error panel.
 
 ### Multiplatform chat
@@ -45,7 +46,7 @@ LiteCast is the next-generation direction of Stream Command Center: a lightweigh
 - Persistent normalized configuration with limits on scenes, sources and outputs.
 - RTMP destinations restricted to `rtmp://` or `rtmps://`.
 - Atomic-style JSON writes using temp files + rename.
-- Native Rust `litecast-engine` migration boundary/standalone FFmpeg runner.
+- Rust `litecast-engine` migration boundary. The control plane still launches FFmpeg itself; the Rust binary is not the production mixer or compositor.
 - Automated Node tests and cross-platform Rust CI.
 - CI currently checks TypeScript, tests, production Vite build, and Rust on Windows/macOS/Linux.
 
@@ -60,7 +61,7 @@ LiteCast is the next-generation direction of Stream Command Center: a lightweigh
 ## Run
 
 ```bash
-npm install
+npm ci
 npm start
 ```
 
@@ -83,13 +84,14 @@ The control surface opens at `http://127.0.0.1:8790`.
 
 1. Open **Settings**. LiteCast probes FFmpeg and marks hardware encoders it can see.
 2. Choose a video preset or set resolution/FPS/bitrate manually.
-3. Select Desktop, Window, or Device for the base capture and choose/enter your audio device.
-4. Open **Studio**. Add scenes plus optional Camera, Image, and Text overlays.
-5. Open **Outputs**. Add the RTMP/RTMPS ingest URL and stream key for each service.
-6. Keep Recording enabled if you also want a local copy.
-7. **Save**, then press **Go Live**.
-8. If you alter the media graph while live, use **Apply live** for a controlled restart with the new graph.
-9. Watch **Performance** for FPS, bitrate, speed and encoder errors.
+3. Select Desktop, Window, or Device for the base capture.
+4. Open **Audio** and add a microphone or, where available, desktop audio. Leave this empty for a silent broadcast.
+5. Open **Studio**. Add scenes plus optional Camera, Image, and Text overlays.
+6. Open **Outputs**. Add the RTMP/RTMPS ingest URL and stream key for each service. The platform name labels the ingest; it does not connect an account.
+7. Enable **Recording** only if you want a local file. The header shows Stream and Record before you start.
+8. **Save**, then press **Go Live**.
+9. If you alter the media graph while live, use **Apply live** for a controlled restart with the new graph.
+10. Watch **Performance** for FPS, bitrate, speed, measured dropped frames, and encoder errors.
 
 ## Multistream design
 

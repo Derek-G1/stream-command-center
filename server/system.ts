@@ -5,13 +5,22 @@ import type { Encoder, SystemCapabilities } from '../shared/types';
 const run = promisify(execFile);
 const ffmpeg = () => process.env.FFMPEG_PATH || 'ffmpeg';
 
+/** A missing FFmpeg binary still sets empty stdout/stderr on the spawn error. That is not a successful probe. */
+export function capturedOutput(error: { code?: string; stdout?: string; stderr?: string }): { stdout: string; stderr: string } | undefined {
+  const stdout = error.stdout ?? '';
+  const stderr = error.stderr ?? '';
+  if ((error.code === 'ENOENT' || error.code === 'ENOTDIR') && !stdout.trim() && !stderr.trim()) return undefined;
+  if (error.stdout !== undefined || error.stderr !== undefined) return { stdout, stderr };
+  return undefined;
+}
+
 async function output(args: string[]): Promise<{ stdout: string; stderr: string }> {
   try {
     const result = await run(ffmpeg(), args, { windowsHide: true, maxBuffer: 4 * 1024 * 1024, timeout: 10_000 });
     return { stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
-    if (e.stdout !== undefined || e.stderr !== undefined) return { stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
+    const captured = capturedOutput(error as { code?: string; stdout?: string; stderr?: string });
+    if (captured) return captured;
     throw error;
   }
 }
@@ -54,12 +63,33 @@ async function devices(): Promise<{ video: string[]; audio: string[] }> {
   return { video: [], audio: [] };
 }
 
+async function desktopAudio(): Promise<{ available: boolean; devices: string[] }> {
+  if (process.platform === 'linux') return { available: true, devices: [] };
+  if (process.platform !== 'win32') return { available: false, devices: [] };
+  try {
+    const { stderr } = await output(['-hide_banner', '-list_devices', 'true', '-f', 'wasapi', '-i', 'dummy']);
+    if (/Unknown input format|Unrecognized option|Error opening input/i.test(stderr) && !/output devices/i.test(stderr)) return { available: false, devices: [] };
+    const devices: string[] = [];
+    let outputSection = false;
+    for (const line of stderr.split(/\r?\n/)) {
+      if (/output devices/i.test(line)) { outputSection = true; continue; }
+      if (/input devices/i.test(line)) { outputSection = false; continue; }
+      const name = /"([^"]+)"/.exec(line)?.[1];
+      if (outputSection && name) devices.push(name);
+    }
+    return { available: /wasapi/i.test(stderr) || devices.length > 0, devices: unique(devices) };
+  } catch {
+    return { available: false, devices: [] };
+  }
+}
+
 export async function probeSystem(): Promise<SystemCapabilities> {
   try {
-    const [{ stdout: versionOut }, { stdout: encodersOut }, found] = await Promise.all([
+    const [{ stdout: versionOut }, { stdout: encodersOut }, found, desktop] = await Promise.all([
       output(['-hide_banner', '-version']),
       output(['-hide_banner', '-encoders']),
       devices().catch(() => ({ video: [], audio: [] })),
+      desktopAudio(),
     ]);
     const encoders: Record<Encoder, boolean> = {
       nvenc: /\bh264_nvenc\b/.test(encodersOut),
@@ -73,6 +103,8 @@ export async function probeSystem(): Promise<SystemCapabilities> {
       encoders,
       videoDevices: found.video,
       audioDevices: found.audio,
+      desktopAudioAvailable: desktop.available,
+      desktopAudioDevices: desktop.devices,
       platform: process.platform,
     };
   } catch {
@@ -82,6 +114,8 @@ export async function probeSystem(): Promise<SystemCapabilities> {
       encoders: { nvenc: false, qsv: false, amf: false, software: false },
       videoDevices: [],
       audioDevices: [],
+      desktopAudioAvailable: false,
+      desktopAudioDevices: [],
       platform: process.platform,
     };
   }
