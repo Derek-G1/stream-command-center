@@ -1,2 +1,10 @@
+node_modules/
+dist/
+dist-server/
+release/
+data/
+recordings/
 .env
-node_modules
+*.log
+target/
+.DS_Store

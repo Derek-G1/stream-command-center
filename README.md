@@ -1,86 +1,163 @@
-# Stream Command Center
+# LiteCast Broadcaster
 
-**Notice:** This project is currently under active development. Some features may not be fully implemented or may contain bugs. This repository serves as a preview of the project's progress and future direction.
+LiteCast is the next-generation direction of Stream Command Center: a lightweight, highly customizable broadcaster that keeps the rich control UI separate from the performance-critical media pipeline.
 
-## About the Project
+> **Current status:** functional **0.1 broadcaster MVP**. It can capture, compose scenes, record, multistream one compatible encode to multiple RTMP/RTMPS services, and aggregate Twitch/YouTube chat. It is **not yet a complete OBS replacement**: the long-term native GPU compositor, production OAuth/credential-vault flows, advanced audio mixer, transitions, and Kick/Facebook chat event integrations remain release-roadmap work.
 
-The Stream Command Center is a web-based, unified dashboard for managing and monitoring a live stream. This application aims to provide streamers with a single panel to track key metrics, manage events, and interact with their community across multiple platforms.
+## What works now
 
-**Key Features (Planned & In Progress):**
+### Broadcasting
 
-* **Real-time Stream Stats:** View live data for viewers, followers, and subscribers.
-* **Event Simulation:** Trigger and test on-stream events like new followers, subscribers, donations, and raids.
-* **Live Alerts:** A central log for all recent stream events.
-* **Unified Live Chat:** A single chat interface to read and respond to messages from platforms like Twitch, YouTube, and Kick.
-* **Text-to-Speech (TTS):** A simple tool to convert text messages into spoken audio for on-stream use.
-* **Twitch Integration:** Connect your Twitch account to fetch real-time follower data.
+- Desktop, window and capture-device input through FFmpeg.
+- Scene collection with an active scene.
+- Camera, image and text overlay sources with position, size and opacity controls.
+- Static scene-layout preview in the Studio UI. It is not a decoded Preview/Program output, and it does not have a separate preview frame rate yet.
+- Controlled **Apply live** restart when the active FFmpeg media graph changes.
+- NVIDIA NVENC, Intel QSV, AMD AMF and software x264 encoder profiles.
+- Configurable resolution, FPS, bitrate and keyframe interval.
+- Optional local MKV or MP4 recording. Recording is off until you enable it.
+- Multistream to Twitch, YouTube, Kick, Facebook or any custom RTMP/RTMPS target by **encoding once and using FFmpeg's tee muxer** for compatible destinations.
+- A failed tee destination uses `onfail=ignore`, so one output does not intentionally take down every other output.
 
----
+### Control UI
 
-## Getting Started
+- Vite + Preact + Tailwind control surface; no Electron shell.
+- Midnight, OLED and Light themes plus compact/comfortable density.
+- 1080p/720p quality presets.
+- FFmpeg capability probe for NVENC/QSV/AMF/x264 availability.
+- FFmpeg video and audio device discovery on Windows and macOS. Windows DirectShow names are listed when the installed FFmpeg prints them. A saved device that is no longer present stays selected and is marked unavailable. Manual device strings remain the fallback when enumeration returns nothing.
+- Import/export of broadcaster configuration.
+- Runtime status over Server-Sent Events: process state, PID, FPS, bitrate, encode speed, and FFmpeg `drop_frames` once a progress sample arrives. Unmeasured stats stay blank instead of showing a fake zero.
+- Multiple microphone inputs, plus desktop loopback where the capture backend supports it, with mute, volume, post-fader RMS, and Gain. Gain is decibels from -30 to +30, where 0 dB is no change, and it runs before the volume fader. Noise suppression, noise gate, compressor, limiter, monitoring, sync offset, application audio, and media-source audio are not applied yet.
+- Performance/error panel.
 
-Since this is a backend-focused project, you will need to set up a few things to get it running locally.
+### Multiplatform chat
 
-### Prerequisites
+- Unified private streamer chat model.
+- Twitch IRC-over-WebSocket adapter with automatic reconnect.
+- YouTube live-chat adapter with page-token/message-ID deduplication.
+- Framework-free viewer chat overlay with `?platform=twitch`, `?platform=youtube`, or `?platform=all` filtering.
+- Separate chat connection settings so credentials never have to be embedded in scene files.
 
-* Node.js (version 18 or higher)
-* A PostgreSQL database
-* Twitch Developer Account (for API keys)
+### Reliability / engineering
 
-### Installation
+- Local-only control plane bound to `127.0.0.1`.
+- Host/origin protections against cross-site writes and basic DNS-rebinding paths.
+- Persistent normalized configuration with limits on scenes, sources and outputs.
+- RTMP destinations restricted to `rtmp://` or `rtmps://`.
+- Atomic-style JSON writes using temp files + rename.
+- Rust `litecast-engine` migration boundary. The control plane still launches FFmpeg itself; the Rust binary is not the production mixer or compositor.
+- Automated Node tests and cross-platform Rust CI.
+- CI currently checks TypeScript, tests, production Vite build, and Rust on Windows/macOS/Linux.
 
-1.  **Clone the Repository**
+## Requirements
 
-    ```bash
-    git clone [https://github.com/Derek-G1/stream-command-center.git](https://github.com/Derek-G1/stream-command-center.git)
-    cd stream-command-center
-    ```
+- Node.js 22+
+- FFmpeg available on `PATH` (or set `FFMPEG_PATH`)
+- A supported capture environment; Windows is the first-class current target
+- Stream ingest URL + stream key for each streaming destination
+- Platform credentials only when you enable that platform's chat adapter
 
-2.  **Install Dependencies**
+## Run
 
-    ```bash
-    npm install
-    ```
+```bash
+npm ci
+npm start
+```
 
-3.  **Set Up Environment Variables**
-    Create a `.env` file in the root directory of the project. This file is crucial for securing your sensitive information and is ignored by Git.
+Windows users can double-click `start-litecast.bat` after installing Node and FFmpeg.
 
-    ```
-    TWITCH_CLIENT_ID="your_twitch_client_id_here"
-    TWITCH_CLIENT_SECRET="your_twitch_client_secret_here"
-    DATABASE_URL="your_postgresql_connection_string_here"
-    FRONTEND_URL="http://localhost:5500" # Or wherever you are serving the frontend
-    PORT=3000
-    ```
+Development:
 
-4.  **Run the Server**
+```bash
+npm run dev
+npm run check
+npm test
+npm run build
+npm run engine:check
+npm run engine:build
+```
 
-    ```bash
-    node server.js
-    ```
-    The server will start on the port specified in your `.env` file (default is `3000`). It will automatically attempt to initialize the database tables on startup.
+The control surface opens at `http://127.0.0.1:8790`.
 
-5.  **View the Frontend**
-    Open `index.html` in your web browser. This file contains the user interface and will connect to your running server.
+## First stream
 
----
+1. Open **Settings**. LiteCast probes FFmpeg and marks hardware encoders it can see.
+2. Choose a video preset or set resolution/FPS/bitrate manually.
+3. Select Desktop, Window, or Device for the base capture.
+4. Open **Audio** and add a microphone or, where available, desktop audio. Choose a detected device; nothing is selected for you. Gain, when you add it, is a dB trim before the fader. The meter is post-fader. Leave audio empty for a silent broadcast.
+5. Open **Studio**. Add scenes plus optional Camera, Image, and Text overlays.
+6. Open **Outputs**. Add the RTMP/RTMPS ingest URL and stream key for each service. The platform name labels the ingest; it does not connect an account.
+7. Enable **Recording** only if you want a local file. The header shows Stream and Record before you start.
+8. **Save**, then press **Go Live**.
+9. If you alter the media graph while live, use **Apply live** for a controlled restart with the new graph.
+10. Watch **Performance** for FPS, bitrate, speed, measured dropped frames, and encoder errors.
 
-## Project Structure
+## Multistream design
 
-* `server.js`: The backend application built with Express. It handles API endpoints, database interactions, and Twitch OAuth.
-* `script.js`: The frontend JavaScript that manages the UI, fetches data from the backend, and handles user interactions.
-* `index.html`: The main HTML file containing the layout for the Stream Command Center dashboard.
-* `style.css`: The CSS for styling the dashboard's user interface.
-* `package.json` & `package-lock.json`: Manage project dependencies and scripts.
+```text
+base capture + scene overlays + audio
+                 |
+                 v
+          FFmpeg composition
+                 |
+          one H.264/AAC encode
+                 |
+              tee muxer
+        /        |        \
+   Twitch     YouTube     Kick ...
+                 |
+           local recording
+```
 
----
+A second encode should only be introduced when a destination genuinely requires a different codec, bitrate, resolution, orientation or composition.
 
-## Contribution
+## Chat overlay
 
-This project is a work in progress. We welcome contributions, feature requests, and bug reports. If you'd like to help, please submit a pull request or open an issue on the repository's GitHub page.
+Examples:
 
----
+```text
+http://127.0.0.1:8790/chat-overlay/?platform=twitch
+http://127.0.0.1:8790/chat-overlay/?platform=youtube
+http://127.0.0.1:8790/chat-overlay/?platform=all
+```
+
+The combined chat is intended primarily for the private streamer dashboard. When a platform's simulcast policy restricts showing other platforms' activity on its output, use the per-platform overlay instead.
+
+## Security
+
+- The HTTP server listens only on `127.0.0.1`.
+- Cross-site state-changing requests are rejected by host/origin checks.
+- `data/`, `.env`, recordings and build artifacts are gitignored.
+- Stream URLs are validated as RTMP/RTMPS before they reach FFmpeg.
+- Chat tokens and stream keys stay local.
+- **Before a public production release**, sensitive tokens should move from gitignored local JSON to the operating-system credential vault. Gitignore is useful, but it is not a secret-storage system.
+
+## Project map
+
+- `server/` — local HTTP/SSE control plane, config validation, FFmpeg process, capability probe and chat adapters.
+- `web/` — Vite/Preact/Tailwind studio UI plus framework-free chat overlay.
+- `shared/` — config/state/source types and defaults.
+- `engine/` — native Rust process wrapper/migration boundary.
+- `tests/` — config and media-graph/multistream regression tests.
+- `docs/` — architecture, platform capabilities, performance budgets and roadmap.
+
+See `docs/ARCHITECTURE.md`, `docs/PLATFORMS.md`, `docs/PERFORMANCE.md` and `docs/ROADMAP.md`.
+
+## Why this is not Electron
+
+The browser-based control panel is served locally and can be closed while the encoder keeps running. LiteCast does not embed a permanent Chromium desktop shell merely to draw controls. A future browser-source subsystem should be isolated and launched only when a scene actually needs one.
+
+## 1.0 direction
+
+The current FFmpeg backend is intentionally useful now. The performance target is still a native pipeline:
+
+```text
+platform capture -> GPU texture -> wgpu compositor -> hardware encoder surface -> mux/output
+```
+
+with zero/low-copy handoff where the platform permits it and FFmpeg retained as a compatibility/fallback backend.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT.

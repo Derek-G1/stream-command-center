@@ -1,0 +1,71 @@
+import { useEffect, useRef, useState } from 'preact/hooks';
+import type { BroadcastConfig, Encoder, SystemCapabilities } from '../../../shared/types';
+import { api } from '../api';
+
+const Field = ({ label, children }: { label: string; children: any }) => <label class="field"><span>{label}</span>{children}</label>;
+const presets: Record<string, Partial<BroadcastConfig['video']>> = {
+  '1080p60': { width: 1920, height: 1080, fps: 60, bitrateKbps: 6000, keyframeSeconds: 2 },
+  '1080p30': { width: 1920, height: 1080, fps: 30, bitrateKbps: 4500, keyframeSeconds: 2 },
+  '720p60': { width: 1280, height: 720, fps: 60, bitrateKbps: 4500, keyframeSeconds: 2 },
+  '720p30 Low': { width: 1280, height: 720, fps: 30, bitrateKbps: 3000, keyframeSeconds: 2 },
+};
+
+export function SettingsPanel({ config, set }: { config: BroadcastConfig; set: (c: BroadcastConfig) => void }) {
+  const [cap, setCap] = useState<SystemCapabilities | null>(null);
+  const [importError, setImportError] = useState('');
+  const file = useRef<HTMLInputElement>(null);
+  useEffect(() => { void api.capabilities().then(setCap).catch(() => {}); }, []);
+  const exportConfig = () => {
+    const safe = { ...config, destinations: config.destinations.map(d => ({ ...d, streamKey: '' })) };
+    const blob = new Blob([JSON.stringify(safe, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'litecast-config-no-secrets.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const importConfig = async (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const selected = input.files?.[0];
+    if (!selected) return;
+    setImportError('');
+    try { set(await api.normalize(JSON.parse(await selected.text()) as unknown)); }
+    catch (err) { setImportError(`Import failed: ${(err as Error).message}`); }
+    finally { input.value = ''; }
+  };
+  return <div class="grid">
+    <section class="panel">
+      <h2>Video</h2>
+      <Field label="Quick preset"><select value="" onChange={e => { const p = presets[e.currentTarget.value]; if (p) set({ ...config, video: { ...config.video, ...p } }); }}><option value="">Choose…</option>{Object.keys(presets).map(name => <option value={name}>{name}</option>)}</select></Field>
+      <Field label="Resolution"><div class="inline"><input type="number" value={config.video.width} onInput={e => set({ ...config, video: { ...config.video, width: +e.currentTarget.value } })}/><span>×</span><input type="number" value={config.video.height} onInput={e => set({ ...config, video: { ...config.video, height: +e.currentTarget.value } })}/></div></Field>
+      <Field label="FPS"><input type="number" value={config.video.fps} onInput={e => set({ ...config, video: { ...config.video, fps: +e.currentTarget.value } })}/></Field>
+      <Field label="Bitrate kbps"><input type="number" value={config.video.bitrateKbps} onInput={e => set({ ...config, video: { ...config.video, bitrateKbps: +e.currentTarget.value } })}/></Field>
+      <Field label="Encoder"><select value={config.video.encoder} onChange={e => set({ ...config, video: { ...config.video, encoder: e.currentTarget.value as Encoder } })}>{([['nvenc', 'NVIDIA NVENC'], ['qsv', 'Intel Quick Sync'], ['amf', 'AMD AMF'], ['software', 'Software x264']] as const).map(([id, label]) => <option value={id} disabled={cap?.ffmpegInstalled && !cap.encoders[id]}>{label}{cap?.ffmpegInstalled ? cap.encoders[id] ? ' ✓' : ' (unavailable)' : ''}</option>)}</select></Field>
+      <Field label="Preset"><select value={config.video.preset} onChange={e => set({ ...config, video: { ...config.video, preset: e.currentTarget.value as BroadcastConfig['video']['preset'] } })}><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="quality">Quality</option></select></Field>
+      {cap && <p class={cap.ffmpegInstalled ? 'muted' : 'warning-text'}>{cap.ffmpegInstalled ? cap.ffmpegVersion : 'FFmpeg was not found. Install it or set FFMPEG_PATH.'}</p>}
+    </section>
+    <section class="panel">
+      <h2>Capture</h2>
+      <Field label="Base capture"><select value={config.capture.kind} onChange={e => set({ ...config, capture: { ...config.capture, kind: e.currentTarget.value as BroadcastConfig['capture']['kind'] } })}><option value="desktop">Desktop</option><option value="window">Window</option><option value="device">Device</option></select></Field>
+      <Field label="Window title"><input value={config.capture.windowTitle} onInput={e => set({ ...config, capture: { ...config.capture, windowTitle: e.currentTarget.value } })}/></Field>
+      <Field label="Video device">{cap?.videoDevices.length ? <select value={config.capture.device} onChange={e => set({ ...config, capture: { ...config.capture, device: e.currentTarget.value } })}><option value="">Choose…</option>{cap.videoDevices.map(d => <option value={d}>{d}</option>)}{config.capture.device && !cap.videoDevices.includes(config.capture.device) && <option value={config.capture.device}>{config.capture.device} (unavailable)</option>}</select> : <input placeholder="FFmpeg video device" value={config.capture.device} onInput={e => set({ ...config, capture: { ...config.capture, device: e.currentTarget.value } })}/>}</Field>
+      <p class="muted small">Audio sources live on the Audio tab. This page only chooses the base picture.</p>
+    </section>
+    <section class="panel">
+      <h2>Recording</h2>
+      <Field label="Record locally"><input type="checkbox" checked={config.recording.enabled} onChange={e => set({ ...config, recording: { ...config.recording, enabled: e.currentTarget.checked } })}/></Field>
+      <Field label="Folder"><input value={config.recording.directory} onInput={e => set({ ...config, recording: { ...config.recording, directory: e.currentTarget.value } })}/></Field>
+      <Field label="Format"><select value={config.recording.format} onChange={e => set({ ...config, recording: { ...config.recording, format: e.currentTarget.value === 'mp4' ? 'mp4' : 'mkv' } })}><option value="mkv">MKV (safer)</option><option value="mp4">MP4</option></select></Field>
+      <p class="muted small">{config.recording.enabled ? `Going live will write a ${config.recording.format.toUpperCase()} file in ${config.recording.directory}.` : 'Recording is off. Going live will not create a recording file.'}</p>
+    </section>
+    <section class="panel">
+      <h2>Interface & configuration</h2>
+      <Field label="Theme"><select value={config.ui.theme} onChange={e => set({ ...config, ui: { ...config.ui, theme: e.currentTarget.value as BroadcastConfig['ui']['theme'] } })}><option value="midnight">Midnight</option><option value="oled">OLED</option><option value="light">Light</option></select></Field>
+      <Field label="Density"><select value={config.ui.density} onChange={e => set({ ...config, ui: { ...config.ui, density: e.currentTarget.value === 'compact' ? 'compact' : 'comfortable' } })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></Field>
+      <div class="row config-actions"><button onClick={exportConfig}>Export setup (no keys)</button><button onClick={() => file.current?.click()}>Import setup</button><input ref={file} class="hidden-input" type="file" accept="application/json,.json" onChange={importConfig}/></div>
+      {importError && <p class="danger-text small">{importError}</p>}
+      <p class="muted small">Exports intentionally blank stream keys. Imports are normalized by the local server before they enter the editor.</p>
+    </section>
+  </div>;
+}

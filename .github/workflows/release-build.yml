@@ -1,0 +1,52 @@
+name: Build LiteCast release artifact
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify
+        run: |
+          npm run check
+          npm test
+
+      - name: Build web and compiled server
+        run: npm run build
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build optional native engine
+        run: cargo build --release --manifest-path engine/Cargo.toml
+
+      - name: Assemble release directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/LiteCast | Out-Null
+          Copy-Item dist release/LiteCast/dist -Recurse
+          Copy-Item dist-server release/LiteCast/dist-server -Recurse
+          Copy-Item docs release/LiteCast/docs -Recurse
+          Copy-Item README.md release/LiteCast/README.md
+          Copy-Item start-litecast-release.bat release/LiteCast/start-litecast.bat
+          Copy-Item engine/target/release/litecast-engine.exe release/LiteCast/litecast-engine.exe
+          New-Item -ItemType Directory -Force release/LiteCast/data | Out-Null
+          New-Item -ItemType Directory -Force release/LiteCast/recordings | Out-Null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiteCast-windows-x64
+          path: release/LiteCast
+          if-no-files-found: error
