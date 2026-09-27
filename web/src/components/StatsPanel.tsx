@@ -1,0 +1,2 @@
+import type { RuntimeStats } from '../../../shared/types';
+export function StatsPanel({runtime}:{runtime:RuntimeStats}){return <><div class="cards">{[['State',runtime.state],['FPS',runtime.fps.toFixed(1)],['Bitrate',`${runtime.bitrateKbps.toFixed(0)} kbps`],['Speed',`${runtime.speed.toFixed(2)}×`],['PID',runtime.pid??'—'],['Dropped',runtime.droppedFrames]].map(([k,v])=><section class="stat"><span>{k}</span><b>{v}</b></section>)}</div>{runtime.lastError&&<section class="panel error-panel"><h2>Last encoder error</h2><pre>{runtime.lastError}</pre></section>}</>}
