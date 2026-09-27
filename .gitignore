@@ -1,2 +1,8 @@
+node_modules/
+dist/
+data/
+recordings/
 .env
-node_modules
+*.log
+target/
+.DS_Store
